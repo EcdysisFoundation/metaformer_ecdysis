@@ -6,6 +6,8 @@
 # --------------------------------------------------------
 
 import os
+from pathlib import Path
+
 import torch
 import numpy as np
 import torch.distributed as dist
@@ -78,7 +80,6 @@ def build_dataset(is_train, config):
             dataset = CachedImageFolder(config.DATA.DATA_PATH, ann_file, prefix, transform,
                                         cache_mode=config.DATA.CACHE_MODE if is_train else 'part')
         else:
-#             root = os.path.join(config.DATA.DATA_PATH, prefix)
             root = './datasets/imagenet'
             dataset = datasets.ImageFolder(root, transform=transform)
         nb_classes = 1000
@@ -123,6 +124,11 @@ def build_dataset(is_train, config):
         root = './datasets/aircraft'
         dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
         nb_classes = 100
+    elif config.DATA.DATASET == 'insectfam':
+        prefix = 'train' if is_train else 'val'
+        root = Path('./datasets/insectfam')
+        dataset = datasets.ImageFolder(str(root/prefix), transform=transform)
+        nb_classes = 3
     else:
         raise NotImplementedError("We only support ImageNet and inaturelist.")
 
