@@ -16,17 +16,25 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import Mixup
 from timm.data import create_transform
 from timm.data.transforms import _pil_interp
+from torchvision.transforms import InterpolationMode
 
+from logger import create_logger
 from .cached_image_folder import CachedImageFolder
 from .samplers import SubsetRandomSampler
 from .dataset_fg import DatasetMeta
+
+
 def build_loader(config):
+
     config.defrost()
-    dataset_train, config.MODEL.NUM_CLASSES = build_dataset(is_train=True, config=config)
+    logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=__name__,
+                           local_rank=config.LOCAL_RANK)
+
+    dataset_train, config.MODEL.NUM_CLASSES = build_dataset(is_train=True, config=config, logger=logger)
     config.freeze()
-    print(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset")
-    dataset_val, _ = build_dataset(is_train=False, config=config)
-    print(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build val dataset")
+    logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset")
+    dataset_val, _ = build_dataset(is_train=False, config=config, logger=logger)
+    logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build val dataset")
 
     num_tasks = dist.get_world_size()
     global_rank = dist.get_rank()
@@ -70,7 +78,7 @@ def build_loader(config):
     return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
 
 
-def build_dataset(is_train, config):
+def build_dataset(is_train, config, logger):
     transform = build_transform(is_train, config)
     if config.DATA.DATASET == 'imagenet':
         prefix = 'train' if is_train else 'val'
@@ -124,13 +132,48 @@ def build_dataset(is_train, config):
         root = './datasets/aircraft'
         dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
         nb_classes = 100
-    elif config.DATA.DATASET == 'insectfam':
-        prefix = 'train' if is_train else 'val'
-        root = Path('./datasets/insectfam')
-        dataset = datasets.ImageFolder(str(root/prefix), transform=transform)
-        nb_classes = 3
+    elif config.DATA.DATASET.startswith('insect'):
+        dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
     else:
-        raise NotImplementedError("We only support ImageNet and inaturelist.")
+        raise NotImplementedError("Dataset not supported.")
+
+    return dataset, nb_classes
+
+
+def load_insect_data(config, is_train, transform, logger) -> (datasets.ImageFolder, int):
+    """
+    Loads insect images from a folder. The data must be inside the datasets directory and must follow IMAGENET's
+    directory structure, i.e.:
+    datasets/insectfam/
+    ├── meta.yaml
+    ├── test
+    │ ├── Coleoptera_Staphylinidae
+    │ ├── Diptera_Chloropidae
+    │ └── Diptera_Sphaeroceridae
+    ├── train
+    │ ├── Coleoptera_Staphylinidae
+    │ ├── Diptera_Chloropidae
+    │ └── Diptera_Sphaeroceridae
+    └── val
+        ├── Coleoptera_Staphylinidae
+        ├── Diptera_Chloropidae
+        └── Diptera_Sphaeroceridae
+
+    Returns: Dataset and number of classes
+
+    """
+    root = Path(config.DATA.DATA_PATH)
+    if not root.is_dir():
+        raise ValueError(f'Dataset root directory not found in {root}')
+    if config.EVAL_MODE:
+        prefix = 'test'
+    else:
+        prefix = 'train' if is_train else 'val'
+    dataset = datasets.ImageFolder(str(root / prefix), transform=transform)
+    classes, _ = dataset.find_classes(dataset.root)
+    nb_classes = len(classes)
+
+    logger.info(f'Found {len(dataset)} images and {nb_classes} classes in {prefix} split of {config.DATA.DATASET}')
 
     return dataset, nb_classes
 
@@ -160,14 +203,14 @@ def build_transform(is_train, config):
         if config.TEST.CROP:
             size = int((256 / 224) * config.DATA.IMG_SIZE)
             t.append(
-                transforms.Resize(size, interpolation=_pil_interp(config.DATA.INTERPOLATION)),
+                transforms.Resize(size, interpolation=InterpolationMode.BILINEAR),
                 # to maintain same ratio w.r.t. 224 images
             )
             t.append(transforms.CenterCrop(config.DATA.IMG_SIZE))
         else:
             t.append(
                 transforms.Resize((config.DATA.IMG_SIZE, config.DATA.IMG_SIZE),
-                                  interpolation=_pil_interp(config.DATA.INTERPOLATION))
+                                  interpolation=InterpolationMode.BILINEAR)
             )
 
     t.append(transforms.ToTensor())

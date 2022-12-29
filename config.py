@@ -85,8 +85,8 @@ _C.MODEL.META_DIMS = []
 # Training settings
 # -----------------------------------------------------------------------------
 _C.TRAIN = CN()
-_C.TRAIN.START_EPOCH = 0
-_C.TRAIN.EPOCHS = 300
+_C.TRAIN.START_EPOCH = 1
+_C.TRAIN.EPOCHS = 100
 _C.TRAIN.WARMUP_EPOCHS = 20
 _C.TRAIN.WEIGHT_DECAY = 0.05
 _C.TRAIN.BASE_LR = 1e-4 # 5e-4
@@ -166,7 +166,7 @@ _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
 # Frequency to save checkpoint
-_C.SAVE_FREQ = 1
+_C.SAVE_FREQ = 10
 # Frequency to logging info
 _C.PRINT_FREQ = 10
 # Fixed random seed

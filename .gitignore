@@ -143,3 +143,6 @@ dmypy.json
 /nabirds
 /aircraft
 /datasets
+
+# Pycharm
+.idea/
