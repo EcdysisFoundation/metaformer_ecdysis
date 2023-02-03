@@ -1,21 +1,27 @@
+import logging
 import os
 import time
 import argparse
 import datetime
 import warnings
 from pathlib import Path
+from typing import List
 
 import numpy as np
+import pandas as pd
 
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torchmetrics
+from matplotlib import pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay
 
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import accuracy, AverageMeter
 from torch.utils.data import DataLoader
-from torchmetrics import Accuracy, Precision, Recall, F1Score
+from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix, StatScores
+from tqdm import tqdm
 
 from config import get_config
 from data.build import build_dataset
@@ -108,12 +114,18 @@ def main(config):
     logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
     model = build_model(config)
 
-    metrics = torchmetrics.MetricCollection([
-        Accuracy(multiclass=True, num_classes=config.MODEL.NUM_CLASSES, average='micro'),
-        Precision(multiclass=True, num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-        Recall(multiclass=True, num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-        F1Score(multiclass=True, num_classes=config.MODEL.NUM_CLASSES, average='macro')
-    ])
+    metrics = [
+        Accuracy(num_classes=config.MODEL.NUM_CLASSES, average='micro'),
+        Precision(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+        Recall(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+        F1Score(num_classes=config.MODEL.NUM_CLASSES, average='macro')
+    ]
+
+    if config.EVAL_MODE:
+        metrics.append(StatScores(num_classes=config.MODEL.NUM_CLASSES, reduce='macro'))
+        metrics.append(ConfusionMatrix(num_classes=config.MODEL.NUM_CLASSES))
+
+    metrics = torchmetrics.MetricCollection(metrics)
     model.metric = metrics  # This need to be here to avoid problems with distributed training
 
     model.cuda()
@@ -125,7 +137,7 @@ def main(config):
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
     model_without_ddp = model.module
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(f"Number of params: {n_parameters}")
+    logger.info(f"Number of trainable parameters: {n_parameters}")
 
     if config.MODEL.PRETRAINED:
         load_pretained(config, model_without_ddp, logger)
@@ -185,45 +197,46 @@ def main(config):
         throughput(data_loader_val, model, logger)
         return
 
-    min_loss = float('inf')  # Used to save the best model
+    # min_loss = float('inf')  # Used to save the best model
 
     # TB logger
     tb_dir = Path(config.OUTPUT) / 'tb'
     tb_dir.mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=tb_dir)
 
-    logger.info("Start training")
     start_time = time.time()
-    for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
-        # Train
-        data_loader_train.sampler.set_epoch(epoch)      
-        train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
-                                   lr_scheduler, writer)
-        if dist.get_rank() == 0 and (epoch % config.SAVE_FREQ == 0 or epoch == (config.TRAIN.EPOCHS - 1)):
-            save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger)
-        
-        # Validate
-        acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
-        logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
+    with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.EPOCHS, unit='epoch') as pbar:
+        for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
+            # Train
+            data_loader_train.sampler.set_epoch(epoch)
+            train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
+                                       lr_scheduler, writer)
+            if dist.get_rank() == 0 and (epoch % config.SAVE_FREQ == 0):
+                save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger)
 
-        # Legacy, not used to define best
-        if acc1 > max_accuracy:
-            max_accuracy = acc1
-            logger.info(f'Max validation accuracy: {max_accuracy:.3f}%')
+            # Validate
+            acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
+            # logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
 
-        if loss < min_loss:
-            # Best validation loss so far
-            min_loss = loss
-            logger.info(f'Minimum validation loss: {min_loss:.3f}')
-            if dist.get_rank() == 0:
-                save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger,
-                                best=True)
+            if acc1 > max_accuracy:
+                max_accuracy = acc1
+                pbar.set_postfix_str(f'Maximum accuracy on validation so far: {max_accuracy:.3f}%')
+                if dist.get_rank() == 0:
+                    save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger,
+                                    best=True)
 
-        if config.DATA.ADD_META:
-            logger.info(f"**********mask meta test***********")
-            acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
-            logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
-#         data_loader_train.terminate()
+            # if loss < min_loss:
+            #     # Best validation loss so far
+            #     min_loss = loss
+            #     logger.info(f'Minimum validation loss: {min_loss:.3f}')
+
+            if config.DATA.ADD_META:
+                logger.info(f"**********mask meta test***********")
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
+                logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
+
+            pbar.update()
+
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     logger.info('Training time {}'.format(total_time_str))
@@ -256,64 +269,72 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
     start = time.time()
     end = time.time()
-    for idx, data in enumerate(data_loader):
-        if config.DATA.ADD_META:
-            samples, targets,meta = data
-            meta = [m.float() for m in meta]
-            meta = torch.stack(meta,dim=0)
-            meta = meta.cuda(non_blocking=True)
-        else:
-            samples, targets= data
-            meta = None
 
-        samples = samples.cuda(non_blocking=True)
-        targets = targets.cuda(non_blocking=True)
-
-        if mixup_fn is not None:
-            samples, targets = mixup_fn(samples, targets)
-        if config.DATA.ADD_META:
-            outputs = model(samples,meta)
-        else:
-            outputs = model(samples)
-
-        if config.TRAIN.ACCUMULATION_STEPS > 1:
-            loss = criterion(outputs, targets)
-            loss = loss / config.TRAIN.ACCUMULATION_STEPS
-            if config.AMP_OPT_LEVEL != "O0":
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-                if config.TRAIN.CLIP_GRAD:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
-                else:
-                    grad_norm = get_grad_norm(amp.master_params(optimizer))
+    with tqdm(desc=f'Training | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]',
+              total=len(data_loader), unit='batch') as pbar:
+        for idx, data in enumerate(data_loader):
+            if config.DATA.ADD_META:
+                samples, targets,meta = data
+                meta = [m.float() for m in meta]
+                meta = torch.stack(meta,dim=0)
+                meta = meta.cuda(non_blocking=True)
             else:
-                loss.backward()
-                if config.TRAIN.CLIP_GRAD:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
+                samples, targets= data
+                meta = None
+
+            samples = samples.cuda(non_blocking=True)
+            targets = targets.cuda(non_blocking=True)
+
+            if mixup_fn is not None:
+                samples, targets = mixup_fn(samples, targets)
+            if config.DATA.ADD_META:
+                outputs = model(samples,meta)
+            else:
+                outputs = model(samples)
+
+            if config.TRAIN.ACCUMULATION_STEPS > 1:
+                loss = criterion(outputs, targets)
+                loss = loss / config.TRAIN.ACCUMULATION_STEPS
+                if config.AMP_OPT_LEVEL != "O0":
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    if config.TRAIN.CLIP_GRAD:
+                        grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
+                    else:
+                        grad_norm = get_grad_norm(amp.master_params(optimizer))
                 else:
-                    grad_norm = get_grad_norm(model.parameters())
-            if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
-                optimizer.step()
+                    loss.backward()
+                    if config.TRAIN.CLIP_GRAD:
+                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
+                    else:
+                        grad_norm = get_grad_norm(model.parameters())
+                if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    lr_scheduler.step_update(epoch * num_steps + idx)
+            else:
+                loss = criterion(outputs, targets)
                 optimizer.zero_grad()
+                if config.AMP_OPT_LEVEL != "O0":
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    if config.TRAIN.CLIP_GRAD:
+                        grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
+                    else:
+                        grad_norm = get_grad_norm(amp.master_params(optimizer))
+                else:
+                    loss.backward()
+                    if config.TRAIN.CLIP_GRAD:
+                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
+                    else:
+                        grad_norm = get_grad_norm(model.parameters())
+                optimizer.step()
                 lr_scheduler.step_update(epoch * num_steps + idx)
-        else:
-            loss = criterion(outputs, targets)
-            optimizer.zero_grad()
-            if config.AMP_OPT_LEVEL != "O0":
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-                if config.TRAIN.CLIP_GRAD:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
-                else:
-                    grad_norm = get_grad_norm(amp.master_params(optimizer))
-            else:
-                loss.backward()
-                if config.TRAIN.CLIP_GRAD:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
-                else:
-                    grad_norm = get_grad_norm(model.parameters())
-            optimizer.step()
-            lr_scheduler.step_update(epoch * num_steps + idx)
+
+            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
+
+            pbar.update()
+            pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
         torch.cuda.synchronize()
 
@@ -322,26 +343,14 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if idx % config.PRINT_FREQ == 0:
+        if tb_logger is not None:
+            step = epoch * num_steps + idx
+            tb_logger.add_scalar('train/loss', loss_meter.avg, global_step=step)
+            tb_logger.add_scalar('train/grad_norm', norm_meter.avg, global_step=step)
             lr = optimizer.param_groups[0]['lr']
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            etas = batch_time.avg * (num_steps - idx)
-            logger.info(
-                f'Train: [{epoch}/{config.TRAIN.EPOCHS}][{idx}/{num_steps}]\t'
-                f'eta {datetime.timedelta(seconds=int(etas))} lr {lr:.6f}\t'
-                f'time {batch_time.val:.4f} ({batch_time.avg:.4f})\t'
-                f'loss {loss_meter.val:.4f} ({loss_meter.avg:.4f})\t'
-                f'grad_norm {norm_meter.val:.4f} ({norm_meter.avg:.4f})\t'
-                f'mem {memory_used:.0f}MB')
-
-            if tb_logger is not None:
-                step = epoch * num_steps + idx
-                tb_logger.add_scalar('train/loss', loss_meter.avg, global_step=step)
-                tb_logger.add_scalar('train/grad_norm', norm_meter.avg, global_step=step)
-                tb_logger.add_scalar('train/lr', lr, global_step=step)
+            tb_logger.add_scalar('train/lr', lr, global_step=step)
 
     epoch_time = time.time() - start
-    logger.info(f"EPOCH {epoch} training takes {datetime.timedelta(seconds=int(epoch_time))}")
 
 
 @torch.no_grad()
@@ -368,66 +377,137 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
     acc5_meter = AverageMeter()
 
     end = time.time()
-    for idx, data in enumerate(data_loader):
-        if config.DATA.ADD_META:
-            images,target,meta = data
-            meta = [m.float() for m in meta]
-            meta = torch.stack(meta,dim=0)
-            if mask_meta:
-                meta = torch.zeros_like(meta)
-            meta = meta.cuda(non_blocking=True)
-        else:
-            images, target = data
-            meta = None
-        
-        images = images.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
 
-        # compute output
-        if config.DATA.ADD_META:
-            output = model(images, meta)
-        else:
-            output = model(images)
+    with tqdm(desc=f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]',
+              total=len(data_loader), unit='batch') as pbar:
+        for idx, data in enumerate(data_loader):
+            if config.DATA.ADD_META:
+                images,target,meta = data
+                meta = [m.float() for m in meta]
+                meta = torch.stack(meta,dim=0)
+                if mask_meta:
+                    meta = torch.zeros_like(meta)
+                meta = meta.cuda(non_blocking=True)
+            else:
+                images, target = data
+                meta = None
 
-        # measure accuracy and record loss
-        loss = criterion(output, target)
-        acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
+            images = images.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
 
-        metric(output, target)
+            # compute output
+            if config.DATA.ADD_META:
+                output = model(images, meta)
+            else:
+                output = model(images)
 
-        acc1 = reduce_tensor(acc1)
-        acc5 = reduce_tensor(acc5)
-        loss = reduce_tensor(loss)
+            # measure accuracy and record loss
+            loss = criterion(output, target)
+            acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
-        loss_meter.update(loss.item(), target.size(0))
-        acc1_meter.update(acc1.item(), target.size(0))
-        acc5_meter.update(acc5.item(), target.size(0))
+            metric.update(output, target)
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+            acc1 = reduce_tensor(acc1)
+            acc5 = reduce_tensor(acc5)
+            loss = reduce_tensor(loss)
 
-        if idx % config.PRINT_FREQ == 0 or config.EVAL_MODE:
+            loss_meter.update(loss.item(), target.size(0))
+            acc1_meter.update(acc1.item(), target.size(0))
+            acc5_meter.update(acc5.item(), target.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            logger.info(
-                f'Batch metrics: [{idx}/{len(data_loader)}]\n'
-                f'Time {batch_time.val:.3f} ({batch_time.avg:.3f}) | '
-                f'Loss {loss_meter.val:.4f} ({loss_meter.avg:.4f}) | '
-                f'Acc@1 {acc1_meter.val:.3f} ({acc1_meter.avg:.3f}) | '
-                f'Acc@5 {acc5_meter.val:.3f} ({acc5_meter.avg:.3f}) | '
-                f'Mem {memory_used:.0f}MB')
 
-            step_metrics = metric.compute()
+            pbar.update()
+            pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
-            logger.info(f'Classification metrics: ' + ' | '.join(f'{m} = {v}' for m, v in step_metrics.items()))
-            if tb_logger is not None:
-                step = epoch * len(data_loader) + idx
-                tb_logger.add_scalar('val/loss', loss_meter.val, global_step=step)
-                tb_logger.add_scalars('val/metrics', step_metrics, global_step=step)
+    epoch_metric = metric.compute()  # TODO fix issue where each sample is evaluated twice due to distribution in 2 gpus (only in eval mode)
 
-            metric.reset()
+    if tb_logger is not None:
+        step = epoch
+        tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
+        tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
+
+    if config.EVAL_MODE:
+        class_names = data_loader.dataset.classes
+        stats = get_stats(metric, class_names, config.OUTPUT, save=True)
+        log_metrics(logger, epoch_metric, 'test')
+        logger.info(f"Statistics per class:\n{stats}")
+        plot_confusion_matrix(metric, class_names, config.OUTPUT, save=True)
+
+    metric.reset()  # Do not accumulate over epochs
 
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
+
+
+def get_stats(metrics, class_names, output_dir, save=True):
+    """
+    Get and save per class statistics
+    Args:
+        metrics: torchmetrics collection, has to have a `StatScores` metric
+        class_names: List of class names
+        output_dir: Output directory path
+        save: Whether to save as a csv file
+
+    Returns: Statistics data frame
+    """
+    stats = metrics['StatScores']
+    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
+
+    stats_data = {'TP': tp,
+                  'FP': fp,
+                  'TN': tn,
+                  'FN': fn,
+                  'Precision': tp / (tp + fp),
+                  'Recall': tp / (tp + fn),
+                  'F1': 2*tp / (2*tp + fp + fn),
+                  'Total samples': tp + fn}
+    stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)
+
+    if save:
+        csv = Path(output_dir)/'eval_stats.csv'
+        stats.to_csv(csv)
+
+    return stats
+
+
+def plot_confusion_matrix(metrics, class_names, output_dir, save=True):
+    """
+    Render and save confusion matrix
+    Args:
+        metrics: torchmetrics collection, has to have a `ConfusionMatrix` metric
+        output_dir: Output directory path
+        save: save: Whether to save as a csv file
+    """
+    matrix = metrics['ConfusionMatrix'].confmat.cpu().numpy()
+    matrix_display = ConfusionMatrixDisplay(matrix, display_labels=class_names)
+
+    fig, ax = plt.subplots(figsize=(40, 40))
+    matrix_display.plot(xticks_rotation='vertical', colorbar=False, ax=ax)
+
+    if save:
+        confusion_matrix = Path(output_dir) / 'confusion_matrix.png'
+        plt.savefig(confusion_matrix)
+
+    plt.show()
+
+
+def log_metrics(logger: logging.Logger, metrics: torchmetrics.Metric, aggregation: str):
+    """
+    Simple function to log classification metrics at batch or epoch level
+    Args:
+        logger:
+        metrics:
+        aggregation:
+
+    Returns:
+
+    """
+    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['StatScores', 'ConfusionMatrix'])
+    logger.info(f'{aggregation.title()} metrics:\n\t{metrics_string}')
 
 
 @torch.no_grad()
@@ -491,7 +571,8 @@ if __name__ == '__main__':
     config.freeze()
 
     os.makedirs(config.OUTPUT, exist_ok=True)
-    logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",local_rank=config.LOCAL_RANK)
+    logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
+                           local_rank=config.LOCAL_RANK)
 
     if dist.get_rank() == 0:
         path = os.path.join(config.OUTPUT, "config.json")
