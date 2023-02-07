@@ -134,6 +134,8 @@ def build_dataset(is_train, config, logger):
         nb_classes = 100
     elif config.DATA.DATASET.startswith('insect'):
         dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
+        if is_train:
+            config.DATA.CLASS_NAMES = dataset.classes
     else:
         raise NotImplementedError("Dataset not supported.")
 
@@ -170,7 +172,7 @@ def load_insect_data(config, is_train, transform, logger) -> (datasets.ImageFold
     else:
         prefix = 'train' if is_train else 'val'
     dataset = datasets.ImageFolder(str(root / prefix), transform=transform)
-    classes, _ = dataset.find_classes(dataset.root)
+    classes, class_to_index = dataset.find_classes(dataset.root)
     nb_classes = len(classes)
 
     logger.info(f'Found {len(dataset)} images and {nb_classes} classes in {prefix} split of {config.DATA.DATASET}')

@@ -1,0 +1,3 @@
+timm>=0.4.5
+opencv-python>=4.5
+yacs>=0.1.8
