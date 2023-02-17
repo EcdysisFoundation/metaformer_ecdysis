@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from config import get_config
 from data.build import build_dataset
-from models import build_model
+from build import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
 from optimizer import build_optimizer

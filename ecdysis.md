@@ -18,11 +18,16 @@ root/
         └── Aeolothrips
             └── fe7c2bc2-4a66-4826-adf3-bd14c4547229_6739.jpg
 ```
-*usage*: generate_data_from_csv.py [-h] [--top-hierarchy TOP_HIERARCHY] [--debug] data_path csv_path output_path
+*usage*: 
+```
+  generate_data_from_csv.py [-h] [--top-hierarchy TOP_HIERARCHY] [--debug] data_path csv_path output_path
+```
 *positional arguments*:
+``` 
   data_path             Path to the input data root directory
   csv_path              Path to the csv file of insect data
   output_path           Output directory path
+```
 
 ### `split_insect_samples`
 
@@ -45,11 +50,44 @@ root/
      └── Oscinella
 ```
 
-*usage*: split_insect_samples.py  [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-images MIN_IMAGES] 
-                                [--debug] [--seed SEED] [--no-copy] [--follow-symlinks]
-                                [--yaml-file YAML_FILE] [--add-reference-images] [--reference-image-path REFERENCE_IMAGE_PATH]
-                                input_directory output_directory
-
+*usage*: 
+```
+split_insect_samples.py [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-images MIN_IMAGES] [--debug] 
+  [--seed SEED] [--no-copy] [--follow-symlinks] [--yaml-file YAML_FILE] [--add-reference-images]
+  [--reference-image-path REFERENCE_IMAGE_PATH] input_directory output_directory
+```
 *positional arguments*:
+```
   input_directory       Path to input directory. Images must be inside subdirectories named as the class they belong to.
   output_directory      Output directory
+```
+
+## Deployment scripts
+
+### Test model deployment `deploy/test.sh`
+
+This script automatically lunches a local *Torchserve* instance, publishes the specified model and sends a picture to
+the prediction endpoint.
+
+*usage*:
+```
+    bash deploy/test.sh model_name image_path
+```
+*positional arguments*:
+```
+    model_name        Metaformer model name (directory inside output/MetaFG_2 directory)
+    image_path        Path to the image to be send for testing
+```
+
+### Publish model script `deploy/publish_model.sh`
+
+Publishes model on ecdysis01, *Torchserve* container must be up and running. Deletes previous model if present.
+
+*usage*:
+```
+    bash deploy/publish_model.sh model_name
+```
+*positional arguments*:
+```
+    model_name        Metaformer model name (directory inside output/MetaFG_2 directory)
+```

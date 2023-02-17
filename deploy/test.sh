@@ -1,12 +1,13 @@
 #!/bin/bash
 
-OUTPUT_PATH=output/MetaFG_2/bugbox+ref_genera_384_4xlr
+MODEL_PATH=output/MetaFG_2/$1
+IMAGE_PATH=${2:-datasets/insectfam/val/Coleoptera_Staphylinidae/Coleoptera_Staphylinidae\ \(4\).jpg}
 
 echo "Archiving model"
 torch-model-archiver --model-name metaformer --version 1.0 --model-file models/MetaFG.py \
-  --serialized-file $OUTPUT_PATH/best.pth --handler deploy/MetaFG_2/handler.py \
+  --serialized-file "$MODEL_PATH/best.pth" --handler deploy/handler.py \
   --export-path deploy/MetaFG_2/model_store/ \
-  --extra-files config.py,$OUTPUT_PATH/config.yaml,models/,$OUTPUT_PATH/taxon_map.csv \
+  --extra-files "config.py,$MODEL_PATH/config.yaml,models/,$MODEL_PATH/taxon_map.csv" \
   --force
 echo "Archiving finished"
 
@@ -15,8 +16,8 @@ torchserve --start --model-store deploy/MetaFG_2/model_store --models metaformer
 sleep 20
 
 echo "Sending test image to prediction endpoint"
-curl localhost:8080/predictions/metaformer \
-  -T datasets/insectfam/val/Coleoptera_Staphylinidae/Coleoptera_Staphylinidae\ \(4\).jpg
+curl localhost:8080/predictions/metaformer -s \
+  -T "$IMAGE_PATH"
 
 echo "Stopping the server"
 torchserve --stop
