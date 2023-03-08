@@ -8,7 +8,7 @@ echo "Archiving model"
 torch-model-archiver --model-name "metaformer" --version 1.0 --model-file "models/MetaFG.py" \
   --serialized-file "$OUTPUT_PATH/best.pth" --handler "deploy/handler.py" \
   --export-path "deploy/MetaFG_2/model_store/" --requirements-file "deploy/requirements.txt" \
-  --extra-files "config.py,$OUTPUT_PATH/config.yaml,models/,$OUTPUT_PATH/taxon_map.csv" \
+  --extra-files "config.py,$OUTPUT_PATH/config.yaml,models/,deploy/inference.py,deploy/taxon_map.csv" \
   --force
 echo "Archiving finished"
 

@@ -2,22 +2,17 @@ import base64
 import csv
 import io
 import logging
-from argparse import Namespace
 from pathlib import Path
 
 import torch
 from PIL import Image
-from torch.nn import Softmax
-from torchvision.transforms import transforms
-from torchvision.transforms.functional import InterpolationMode
 
 from ts.torch_handler.vision_handler import VisionHandler
 
-from config import get_inference_config
-from build import build_model
+from inference import MetaformerInferencer, load_mapping
 
-LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class MetaformerHandler(VisionHandler):
@@ -25,30 +20,10 @@ class MetaformerHandler(VisionHandler):
 
     def __init__(self):
         super(MetaformerHandler, self).__init__()
-        self.config = None
-        self.model_pt_path = None
         self.device = 'cpu'
-        self.transform_image = None
-        self.softmax = Softmax(dim=1)
-        self.taxons = [*csv.DictReader(open('taxon_map.csv'))]
-
-    def get_config(self, filename: str = 'config'):
-        """
-        Generate configuration object for the Metaformer model
-        Args:
-            filename: Name of the configuration yaml file
-        """
-        args = Namespace(cfg=f'{filename}.yaml')
-        self.config = get_inference_config(args)
-
-    def create_model(self):
-        """
-        Build model and load weights
-        """
-        self.model = build_model(self.config)
-        checkpoint = torch.load(self.model_pt_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'], strict=False)
-        self.model.eval()
+        self.mapping = load_mapping(Path('taxon_map.csv'))
+        self.config = None
+        self.checkpoint = None
 
     def get_context(self, context):
         """
@@ -62,7 +37,8 @@ class MetaformerHandler(VisionHandler):
         properties = context.system_properties
         model_dir = Path(properties.get("model_dir"))
         serialized_file = self.manifest['model']['serializedFile']
-        self.model_pt_path = model_dir / serialized_file
+        self.checkpoint = model_dir / serialized_file
+        self.config = Path('config.yaml')
 
     def initialize(self, context):
         """
@@ -72,34 +48,11 @@ class MetaformerHandler(VisionHandler):
         """
 
         self.get_context(context)
-        self.get_config()
 
-        self.create_model()
-
-        self.transform_image = self.create_transform()
+        self.model = MetaformerInferencer(self.device)
+        self.model.build(self.config, self.checkpoint, output_function='softmax')
 
         self.initialized = True
-
-    def create_transform(self):
-        """
-        Create image transformation as in training. The transformation is a composition of Resizing to model's input
-        image size -> Conversion to torch tensor -> Normalization using Imagenet's mean and std.
-
-        Returns: Transformation callable
-        """
-
-        imagenet_default_mean = (0.485, 0.456, 0.406)
-        imagenet_default_std = (0.229, 0.224, 0.225)
-
-        image_size = self.config.DATA.IMG_SIZE
-
-        transform = transforms.Compose([
-            transforms.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR),
-            transforms.ToTensor(),
-            transforms.Normalize(imagenet_default_mean, imagenet_default_std)
-        ])
-
-        return transform
 
     def preprocess(self, data):
         """The preprocess function converts the input data to a float tensor
@@ -108,12 +61,11 @@ class MetaformerHandler(VisionHandler):
         Returns:
             list : The preprocess function returns the input image as a list of float tensors.
         """
-        images = []
-
+        image = None
         for row in data:
             # Compat layer: normally the envelope should just return the data
             # directly, but older versions of Torchserve didn't have envelope.
-            image = row.get("data") or row.get("body") or row.get("file")  # BugBox adds uploaded images on the 'file' field
+            image = row.get("data") or row.get("body") or row.get("file")  # BugBox puts uploaded images on the 'file' field
             if isinstance(image, str):
                 # if the image is a string of bytesarray.
                 image = base64.b64decode(image)
@@ -121,53 +73,8 @@ class MetaformerHandler(VisionHandler):
             # If the image is sent as bytesarray
             if isinstance(image, (bytearray, bytes)):
                 image = Image.open(io.BytesIO(image))
-                image = self.image_processing(image)
-            else:
-                # if the image is a list
-                image = torch.FloatTensor(image)
-
-            images.append(image)
-
-        return torch.stack(images).to(self.device)
-
-    def image_processing(self, image):
-        """
-        Process image to be fed to the model
-        Args:
-            image: PIL image
-
-        Returns: Transformed image
-        """
-
-        # Check if image is in the correct format and colorspace
-        if isinstance(image, Image.Image):
-            image = image.convert('RGB')
-        else:
-            raise TypeError(f'Expected a PIL image but got {type(image)} instead')
-
-        # Transform
-        image = self.transform_image(image)
 
         return image
-
-    @torch.no_grad()
-    def infer(self, images):
-        """
-        Get top 3 predictions on a batch of images
-        Args:
-            images: Batch of images of shape [N, C, W, H]
-
-        Returns: Tensor of shape [N, 3] of top 3 predictions for every image in the batch
-        """
-
-        predictions = self.model(images)
-        probabilities = self.softmax(predictions)
-        probabilities, class_indexes = torch.topk(probabilities, 3, dim=1)
-
-        output = {'class_indices': class_indexes,
-                  'probabilities': probabilities}
-
-        return output
 
     def postprocess(self, inference_data, minimum_confidence=0.0):
         """
@@ -192,37 +99,33 @@ class MetaformerHandler(VisionHandler):
         Returns: List of response dictionary
 
         """
+        class_names = self.model.config.DATA.CLASS_NAMES
 
-        predictions = torch.sort(inference_data['probabilities'], dim=1, descending=True)
-
-        prediction_probabilities = predictions.values.tolist()
-        prediction_indices = predictions.indices.tolist()
-        class_indices = inference_data['class_indices'].tolist()
+        probabilities, class_indices = torch.topk(inference_data, 3, dim=1, sorted=True)
 
         output = []
 
-        for confidences, ranks, indices in zip(prediction_probabilities, prediction_indices, class_indices):
-            primary_confidence, primary_class = confidences[0], indices[ranks[0]]
+        for confidences, indices in zip(probabilities.tolist(), class_indices.tolist()):
+            primary_confidence, primary_class_index = confidences[0], indices[0]
 
-            if primary_confidence < minimum_confidence:
+            if primary_confidence >= minimum_confidence:
+                labels = class_names[primary_class_index]  # Map index to name i.e. 0 -> 'Diphthera festiva'
+                taxonid = self.mapping.get(labels, 0)  # Map name to GBIF taxon id i.e. 'Diphthera festiva' -> 5108951
+            else:
                 taxonid = 0
                 labels = 'Unclassified'
-            else:
-                taxonid = self.taxons[primary_class]['taxon_id']
-                labels = self.taxons[primary_class]['class_name']
 
             response = {'taxonid': int(taxonid),
                         'confidence': round(primary_confidence*100, 2),  # Convert to percentage
-                        'labels': labels,
+                        'morphospecie': labels,
                         'optional_preds': []}
 
             # Add optional predictions if there is a confident primary prediction
-            if primary_confidence > minimum_confidence:
-                for optional_confidence, optional_rank in zip(confidences[1:], ranks[1:]):
-                    optional_class = indices[optional_rank]
+            if primary_confidence >= minimum_confidence:
+                for optional_confidence, optional_class_index in zip(confidences[1:], indices[1:]):
                     response['optional_preds'].append({
                         'pred_op': round(optional_confidence*100, 2),
-                        'class_op': self.taxons[optional_class]['class_name']
+                        'class_op': class_names[optional_class_index]
                     })
 
             output.append(response)
@@ -239,7 +142,7 @@ class MetaformerHandler(VisionHandler):
         Returns: Output response
         """
         images = self.preprocess(data)
-        inference = self.infer(images)
-        output = self.postprocess(inference)
+        predictions = self.model(images)
+        output = self.postprocess(predictions)
 
         return output
