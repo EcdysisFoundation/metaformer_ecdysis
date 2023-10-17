@@ -280,6 +280,21 @@ def split_from_directory(root: Path, output: Path, train_size: float, depth: int
     else:
         random_split(images, train_size, False, output=output, make_directory_tree=make_directory_tree, seed=SEED)
 
+def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.DataFrame:
+    """
+    Get the number of images per class in each split
+    Args:
+        splits: Dictionary of lists of image paths per split, the key is the class name, the value is a dict of split, list of image path of that split and class
+    Returns:
+        Dataframe with the number of images per class in each split, columns are split names (train,test,val), rows are class ids
+    """
+    counts = []
+    for class_id, split in splits.items():
+        # id, train, test, val
+        counts.append({"id":class_id,**{split_name: len(image_paths) for split_name, image_paths in split.items()}})
+    return pd.DataFrame(counts)
+
+
 
 def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool, classification_method: str,
                   refimages: pd.DataFrame = None, save_yaml: bool = True, seed: int = SEED, **kwargs):
@@ -318,11 +333,14 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
         underrepresented_name = 3458
     else:
         raise ValueError(f'\"{classification_method}\" is not a valid classification method')
-
+    # When using morphospecies class name here is actually the id of the class, converted to str, not the name
     images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented
+    # Moves the underrepresented classes to incertae sedis
     images = filter_underrepresented(images, kwargs.get('min_images', 20), underrepresented_name)
 
     splits = {}
+
+
     for class_name, image_list in images.items():
         class_name = str(class_name)
 
@@ -336,6 +354,7 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
     if save_yaml:
         yaml_name = kwargs.get('yaml_name', 'splits.yaml')
         save_yaml_file({'seed': seed, 'splits': splits}, output, yaml_name)
+    return splits
 
 
 if __name__ == '__main__':

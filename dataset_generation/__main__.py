@@ -4,7 +4,7 @@ from pathlib import Path
 
 from . import LOGGING_LEVEL, SEED, TAXON_LEVELS
 from .db import BugBoxDB
-from .split import split_from_df
+from .split import split_from_df, get_count_per_class_split
 from .utils import drop_identical_images
 
 logger = logging.getLogger(__name__)
@@ -59,8 +59,9 @@ if args.classification_method == 'GBIF':
 else:
     refimages = None
 
-split_from_df(images, args.train_size, dataset_dir, not args.hard_copy, args.classification_method,
+splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy, args.classification_method,
               rank=args.taxon_rank, seed=SEED, refimages=refimages, min_images=args.minimum_images)
+
 
 meta_file = dataset_dir/'metadata.csv'
 images.to_csv(meta_file, index=False)
@@ -68,5 +69,10 @@ images.to_csv(meta_file, index=False)
 ## This needs to be commented until the morphospecies table in production is populated
 taxon_map = db.get_morphospecies_df(columns=['id', 'name', 'taxon_id'])
 taxon_map.to_csv('deploy/taxon_map.csv', index=False)
+
+counts = get_count_per_class_split(splits)
+counts = counts.merge(taxon_map, left_on='class', right_on='id',how='left')
+count_file = dataset_dir/'counts.csv'
+counts.to_csv(count_file, index=False)
 
 db.disconnect()
