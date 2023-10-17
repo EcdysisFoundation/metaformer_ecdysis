@@ -10,6 +10,10 @@ from .utils import drop_identical_images
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
 
+def get_split_counts(splits, taxon_map):
+    counts_df = get_count_per_class_split(splits)
+    counts_df["id"] = counts_df["id"].astype(int)
+    return taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
 
 def get_args() -> argparse.Namespace:
 
@@ -70,9 +74,8 @@ images.to_csv(meta_file, index=False)
 taxon_map = db.get_morphospecies_df(columns=['id', 'name', 'taxon_id'])
 taxon_map.to_csv('deploy/taxon_map.csv', index=False)
 
-counts = get_count_per_class_split(splits)
-counts = counts.merge(taxon_map, left_on='class', right_on='id',how='left')
-count_file = dataset_dir/'counts.csv'
+counts_df = get_split_counts(counts_df, taxon_map)
+count_file = dataset_dir / 'counts.csv'
 counts.to_csv(count_file, index=False)
 
 db.disconnect()
