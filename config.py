@@ -44,6 +44,8 @@ _C.DATA.VAL_PATH = None
 # arnold dataset parallel
 _C.DATA.NUM_READERS = 4
 
+_C.DATA.TRAIN_SAMPLES = None
+_C.DATA.TEST_SAMPLES = None
 
 #meta info
 _C.DATA.ADD_META = False
@@ -51,6 +53,8 @@ _C.DATA.FUSION = 'early'
 _C.DATA.MASK_PROB = 0.0
 _C.DATA.MASK_TYPE = 'constant'
 _C.DATA.LATE_FUSION_LAYER = -1
+
+_C.DATA.CLASS_NAMES = []
 
 # -----------------------------------------------------------------------------
 # Model settings
@@ -95,7 +99,7 @@ _C.TRAIN.MIN_LR = 1e-5 # 5e-6
 # Clip gradient norm
 _C.TRAIN.CLIP_GRAD = 5.0
 # Auto resume from latest checkpoint
-_C.TRAIN.AUTO_RESUME = True
+_C.TRAIN.AUTO_RESUME = False
 # Gradient accumulation steps
 # could be overwritten by command line argument
 _C.TRAIN.ACCUMULATION_STEPS = 0
@@ -120,6 +124,15 @@ _C.TRAIN.OPTIMIZER.EPS = 1e-8
 _C.TRAIN.OPTIMIZER.BETAS = (0.9, 0.999)
 # SGD momentum
 _C.TRAIN.OPTIMIZER.MOMENTUM = 0.9
+
+# Sampler
+_C.TRAIN.SAMPLER = None
+
+# Early stopping
+_C.TRAIN.EARLY_STOP = CN()
+_C.TRAIN.EARLY_STOP.PATIENCE = 20
+_C.TRAIN.EARLY_STOP.MIN_DELTA = 0.01  # Minimum change in monitored value to qualify as an improvement
+_C.TRAIN.EARLY_STOP.MIN_EPOCHS = 80  # Minimum number of epochs to run before enabling stopping
 
 # -----------------------------------------------------------------------------
 # Augmentation settings
@@ -161,10 +174,12 @@ _C.TEST.CROP = True
 # Mixed precision opt level, if O0, no amp is used ('O0', 'O1', 'O2')
 # overwritten by command line argument
 _C.AMP_OPT_LEVEL = 'O0'
+_C.USE_AMP = False
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
+_C.VERSION = None
 # Frequency to save checkpoint
 _C.SAVE_FREQ = 10
 # Frequency to logging info
@@ -224,10 +239,16 @@ def update_config(config, args):
         config.OUTPUT = args.output
     if args.tag:
         config.TAG = args.tag
+    if args.version:
+        config.VERSION = args.version
     if args.eval:
         config.EVAL_MODE = True
     if args.throughput:
         config.THROUGHPUT_MODE = True
+    if args.sampler:
+        config.TRAIN.SAMPLER = args.sampler
+    if args.amp:
+        config.USE_AMP = True
 
         
     if args.num_workers is not None:

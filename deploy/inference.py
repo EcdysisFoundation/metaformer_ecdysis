@@ -124,7 +124,7 @@ def _get_args() -> argparse.Namespace:
 def load_mapping(map_file: Path):
     with open(map_file) as f:
         next(f)  # Skip header
-        mapping = {class_name: taxon_id for class_name, taxon_id in csv.reader(f)}
+        mapping = {morphospecies_id: (morphospecies_name, taxon_id) for morphospecies_id, morphospecies_name, taxon_id in csv.reader(f)}
 
         return mapping
 

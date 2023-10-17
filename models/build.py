@@ -4,18 +4,17 @@ from MetaFG import MetaFG_2
 def build_model(config):
     model_type = config.MODEL.TYPE
     if model_type == 'MetaFG':
-        if config.MODEL.NAME == 'MetaFG_2':
-            model = MetaFG_2(
-                    pretrained=False,
-                    num_classes=config.MODEL.NUM_CLASSES,
-                    drop_path_rate=config.MODEL.DROP_PATH_RATE,
-                    img_size=config.DATA.IMG_SIZE,
-                    only_last_cls=config.MODEL.ONLY_LAST_CLS,
-                    extra_token_num=config.MODEL.EXTRA_TOKEN_NUM,
-                    meta_dims=config.MODEL.META_DIMS
-            )
-        else:
-            raise NotImplementedError(f"Unkown model: {model_type}")
+        model = MetaFG_2(
+                pretrained=False,
+                num_classes=config.MODEL.NUM_CLASSES,
+                drop_path_rate=config.MODEL.DROP_PATH_RATE,
+                img_size=config.DATA.IMG_SIZE,
+                only_last_cls=config.MODEL.ONLY_LAST_CLS,
+                extra_token_num=config.MODEL.EXTRA_TOKEN_NUM,
+                meta_dims=config.MODEL.META_DIMS
+        )
+    else:
+        raise NotImplementedError(f"Unknown model: {model_type}")
 
     # TODO add rest of the models
 

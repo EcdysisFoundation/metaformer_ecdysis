@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# This script is used to train a new model and deploy it on the server.
+# Arguments: $1: deployment server address, $2: model tag
+
+set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
+
+# Cleanup on error and send failed signal
+function failed () {
+  echo "The script failed, reverting changes..."
+#  mv "${MODEL_PREFIX}/${BACKUP}" "${MODEL_PREFIX}/$1" || echo "Reverting model failed"
+  rm -r "datasets/${DATASET}"
+  mv "datasets/${DATASET}_backup_$(date +%Y%m%d)" "datasets/${DATASET}" || true
+  curl -s "$MONITOR?state=fail"
+}
+
+cd /home/ecdysis/MetaFormer/
+
+MONITOR="https://cronitor.link/p/29925306f8d947d4a1659c63083bb7c1/i5A0js"
+MODEL_PREFIX="output/ecdysis/$2"
+
+# Send started signal
+curl -s "$MONITOR?state=run"
+
+DEPLOYED_VERSION=$(curl  "$1:8085/models/metaformer" -s | jq -r .[0].modelVersion)
+LAST_VERSION=$(find "output/ecdysis/$2" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort -r | head -n 1)
+VERSION_MAJOR=$(echo "$LAST_VERSION" | cut -d. -f1)
+VERSION_MINOR=$(echo "$LAST_VERSION" | cut -d. -f2)
+THIS_VERSION=$VERSION_MAJOR.$((VERSION_MINOR + 1))
+
+# Backup old model and dataset
+#BACKUP="$2_backup_$(date +%Y%m%d)"
+#mv "${MODEL_PREFIX}/$2" "${MODEL_PREFIX}/${BACKUP}" || echo "Model does not exist, skipping backup"
+DATASET="bugbox_$2"
+mv "datasets/${DATASET}" "datasets/${DATASET}_backup_$(date +%Y%m%d)" || echo "Dataset does not exist, nothing to backup"
+
+trap failed ERR
+
+# Update datasaet
+python -m dataset_generation morphospecie --dataset-name "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
+wait
+. ./deploy/merge_other-incertae.sh "$DATASET"  # Needed because of the change: other -> incertae sedis
+curl -s "$MONITOR?state=ok&msg=Dataset%20generated"
+
+# Run training starting from last best checkpoint
+python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/ecdysis.yaml \
+   --data-path "datasets/${DATASET}/" --tag "$2" --version "$THIS_VERSION" --epochs 1 \
+   --pretrain "${MODEL_PREFIX}/${LAST_VERSION}/best.pth" --ignore-user-warnings  # Avoid user warnings on logs
+wait
+curl -s "${MONITOR}?state=ok&msg=Training%20finished"
+
+# Evaluate trained model
+python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py \
+  --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval \
+  --pretrain "${MODEL_PREFIX}/${THIS_VERSION}/best.pth"
+wait
+curl -s "$MONITOR?state=ok&msg=Evaluation%20finished"
+
+# Serve new model
+if . ./deploy/serve.sh "$2" "$1" "$THIS_VERSION"; then
+  echo "Model version $THIS_VERSION deployed, unregistering old model..."
+  curl -X DELETE -s "$1:8085/models/metaformer/$DEPLOYED_VERSION" | jq -r .status
+  curl -s "$MONITOR?state=ok&msg=Model%20version%20$THIS_VERSION%20deployed"
+else
+  echo "Failed to deploy new model"
+  curl -s "$MONITOR?state=fail&msg=Failed%20to%20deploy%20new%20model"
+  exit 1
+fi
+
+echo "Syncing stats files..."
+. ./deploy/sync_results.sh "$2" "$THIS_VERSION"
+
+# Compress backup of old model
+echo "Compressing old model..."
+tar --remove-files -zcvf "$MODEL_PREFIX/$LAST_VERSION.tar.gz" "$MODEL_PREFIX/${LAST_VERSION}-backup" || echo "Model backup does not exist, skipping compression"
+#rm -r "${MODEL_PREFIX:?}/${LAST_VERSION:?}" || echo "Model backup does not exist, skipping deletion"  # SC2115
+
+echo "All steps completed successfully"
+curl -s "$MONITOR?state=complete"

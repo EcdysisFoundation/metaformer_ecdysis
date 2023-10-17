@@ -49,7 +49,7 @@ class Relative_Attention(nn.Module):
         # get pair-wise relative position index for each token
         coords_h = torch.arange(self.img_size[0])
         coords_w = torch.arange(self.img_size[1])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, h, w
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))  # 2, h, w
         coords_flatten = torch.flatten(coords, 1)  # 2, h*w
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, h*w, h*w
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # h*w, h*w, 2
