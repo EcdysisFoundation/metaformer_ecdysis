@@ -30,7 +30,7 @@ def get_model_metrics(config: CfgNode):
     return MetricCollection(metrics)
 
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output_dir: Path, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -55,13 +55,13 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output_dir: Pat
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
-        csv = Path(output_dir)/'eval_stats.csv'
-        stats.to_csv(csv)
+        # csv = Path(output_dir)/'eval_stats.csv'
+        stats.to_csv(output)
 
     return stats
 
 
-def plot_confusion_matrix(metrics: MetricCollection, class_names: List[str], output_dir: Path, save: bool = True):
+def plot_confusion_matrix(metrics: MetricCollection, class_names: List[str], output: Path, save: bool = True):
     """
     Render and save confusion matrix
     Args:
@@ -77,8 +77,8 @@ def plot_confusion_matrix(metrics: MetricCollection, class_names: List[str], out
     matrix_display.plot(xticks_rotation='vertical', colorbar=False, ax=ax)
 
     if save:
-        confusion_matrix = Path(output_dir) / 'confusion_matrix.png'
-        plt.savefig(confusion_matrix)
+        # confusion_matrix = Path(output_dir) / 'confusion_matrix.png'
+        plt.savefig(output)
 
     plt.show()
 

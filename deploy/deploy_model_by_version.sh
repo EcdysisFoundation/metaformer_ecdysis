@@ -3,24 +3,32 @@
 # Deploy specified version of the metaformer model trained on morphospecies.
 # The model checkpoint needs to be inside the output directory and compressed.
 
-# Usage: ./deploy_model_by_version.sh <model_tag> <model_version> <server_address>
+# Usage: ./deploy_model_by_version.sh <model_tag> <server_address> <model_version>
 
+set -e
+
+DEPLOYED_VERSION=$(curl  "$2:8085/models/metaformer" -s | jq -r .[0].modelVersion || echo "None")
+if [[ "$DEPLOYED_VERSION" == "$3" ]]; then
+    echo "Model version $3 already deployed"
+    exit 0
+fi
+
+cd /home/ecdysis/MetaFormer/
 MODEL_PREFIX="output/ecdysis/$1"
 
 # Check if the model checkpoint exists
-CHECKPOINT="${MODEL_PREFIX}/$2.tar.gz"
+CHECKPOINT="${MODEL_PREFIX}/$3.tar.gz"
 if [[ ! -f "$CHECKPOINT" ]]; then
     echo "Model checkpoint $CHECKPOINT not found. This are the available checkpoints:"
-    find output/ecdysis/test/ -maxdepth 1 -type f -name "*.tar.gz" -printf "%f, "
+    find "$MODEL_PREFIX" -maxdepth 1 -type f -name "*.tar.gz" -printf "%f, "
     exit 1
 else
-    DEPLOYED_VERSION=$(curl  "$1:8085/models/metaformer" -s | jq -r .[0].modelVersion)
-    echo "Deploying model $1 version $2"
-    tar -xzf "${MODEL_PREFIX}/$2.tar.gz"
-    . ./deploy/serve.sh "$1" "$3" "$2"
+    echo "Deploying $1 model version $3"
+    tar -xzf "${MODEL_PREFIX}/$3.tar.gz"
+    trap 'rm -r ${MODEL_PREFIX:?}/$3' EXIT  # Remove the extracted folder on exit
+    . ./deploy/serve.sh "$1" "$2" "$3"
     wait
-    rm -r "${MODEL_PREFIX:?}/$2"
-    curl -X DELETE -s "$1:8085/models/metaformer/$DEPLOYED_VERSION" | jq -r .status
+    curl -X DELETE -s "$2:8085/models/metaformer/$DEPLOYED_VERSION" | jq -r .status || echo "No model to remove."
     sleep 2
-    echo "Model $1 version $2 deployed, version $DEPLOYED_VERSION removed."
+    echo "Model $1 version $3 deployed"
 fi

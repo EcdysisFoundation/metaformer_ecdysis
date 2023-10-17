@@ -194,7 +194,7 @@ def main(config):
     stopper = EarlyStopper(patience=config.TRAIN.EARLY_STOP.PATIENCE, min_delta=config.TRAIN.EARLY_STOP.MIN_DELTA)
 
     start_time = time.time()
-    with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS,
+    with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1,
               unit='epoch', initial=config.TRAIN.START_EPOCH) as pbar:
         for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
             # Train
@@ -257,8 +257,9 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
     loss_meter = AverageMeter()
     norm_meter = AverageMeter()
 
-    with tqdm(desc=f'Training | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]', total=len(data_loader),
-              unit='batch') as pbar:
+    pbar_description = f'Training | Rank {dist.get_rank()} | ' \
+                       f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
+    with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
         for idx, data in enumerate(data_loader):
             if config.DATA.ADD_META:
                 samples, targets, meta = data
@@ -414,11 +415,11 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
     if config.EVAL_MODE and dist.get_rank() == 0:
-        class_names = pd.read_csv('deploy/taxon_map.csv', index_col='id').iloc[map(int, config.DATA.CLASS_NAMES)]
-        stats = get_stats(metric, class_names, config.OUTPUT, save_csv=True)
+        class_names = pd.read_csv('deploy/taxon_map.csv', index_col='id').loc[map(int, config.DATA.CLASS_NAMES), 'name']
+        stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
-        plot_confusion_matrix(metric, class_names, config.OUTPUT, save=True)
+        plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
         dump_summary(epoch_metric, config, dump=True)
 
     metric.reset()  # Do not accumulate over epochs

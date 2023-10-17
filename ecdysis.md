@@ -160,6 +160,16 @@ BugBox, executes training and evaluation and deploys the model with the next ava
     model_name        Metaformer model name (directory inside output/ecdysis directory)
 ```
 
+For manually lunched trainings you can also use the command:
+```commandline
+run-metaformer-training
+```
+This is an alias for `conda run --live-stream -n metaformer-amp /home/ecdysis/MetaFormer/deploy/automatic_training.sh 
+ecdysis01.local morphospecies`.
+
+> *Note:* Using `nohup` will not prevent the training process to be killed when the shell session is terminated. This is
+> due to an issue with signaling and Pytorch's distributed training (see https://github.com/pytorch/pytorch/issues/67538).
+> To run the training script in the background and close the terminal you must use `tmux` instead.
 
 ### Torchserve inference and management
 

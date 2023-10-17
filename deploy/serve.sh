@@ -35,8 +35,8 @@ curl -X PUT -s "$2:8085/models/metaformer/$3/set-default" | jq -r .status
 sleep 30
 
 echo "Sending test request..."
-TEST_ID=$(curl -s "localhost:8084/predictions/metaformer" -T "tests/diabrotica.JPG" | jq -r .taxonid)
-if [ $TEST_ID = 1048497 ]
+TEST_ID=$(curl -s "$2:8084/predictions/metaformer" -T "tests/diabrotica.JPG" | jq -r .taxonid)
+if [ "${TEST_ID}" = 1048497 ]
 then
   echo "Test prediction succeeded"
 else

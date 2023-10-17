@@ -279,7 +279,7 @@ def update_config(config, args):
     config.LOCAL_RANK = args.local_rank
 
     # output folder
-    config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)
+    config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG, str(config.VERSION))
 
     config.freeze()
 

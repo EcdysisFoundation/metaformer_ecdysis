@@ -24,7 +24,8 @@ class BugBoxDB:
             (connection.server, 22),
             ssh_username=connection.ssh_username,
             ssh_password=connection.ssh_password,
-            remote_bind_address=(connection.pg_host, connection.pg_port),
+            #remote_bind_address=(connection.pg_host, connection.pg_port),
+            remote_bind_address=('localhost', connection.pg_port),
             local_bind_address=('localhost', local_port)
             )
         self.url = URL.create(

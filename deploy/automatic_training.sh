@@ -10,7 +10,9 @@ function failed () {
   echo "The script failed, reverting changes..."
 #  mv "${MODEL_PREFIX}/${BACKUP}" "${MODEL_PREFIX}/$1" || echo "Reverting model failed"
   rm -r "datasets/${DATASET}"
+  echo "Renaming datasets/${DATASET}_backup_$(date +%Y%m%d) to datasets/${DATASET}" 
   mv "datasets/${DATASET}_backup_$(date +%Y%m%d)" "datasets/${DATASET}" || true
+  tar --remove-files -zcvf "${MODEL_PREFIX}/${THIS_VERSION}_failed.tar.gz" "${MODEL_PREFIX}/${THIS_VERSION}" || true
   curl -s "$MONITOR?state=fail"
 }
 
@@ -28,6 +30,9 @@ VERSION_MAJOR=$(echo "$LAST_VERSION" | cut -d. -f1)
 VERSION_MINOR=$(echo "$LAST_VERSION" | cut -d. -f2)
 THIS_VERSION=$VERSION_MAJOR.$((VERSION_MINOR + 1))
 
+export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+echo "Found ${GPU_COUNT} GPU(s)"
+
 # Backup old model and dataset
 #BACKUP="$2_backup_$(date +%Y%m%d)"
 #mv "${MODEL_PREFIX}/$2" "${MODEL_PREFIX}/${BACKUP}" || echo "Model does not exist, skipping backup"
@@ -39,18 +44,18 @@ trap failed ERR
 # Update datasaet
 python -m dataset_generation morphospecie --dataset-name "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
 wait
-. ./deploy/merge_other-incertae.sh "$DATASET"  # Needed because of the change: other -> incertae sedis
+#. ./deploy/merge_other-incertae.sh "$DATASET"  # Needed because of the change: other -> incertae sedis
 curl -s "$MONITOR?state=ok&msg=Dataset%20generated"
 
 # Run training starting from last best checkpoint
-python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/ecdysis.yaml \
-   --data-path "datasets/${DATASET}/" --tag "$2" --version "$THIS_VERSION" --epochs 1 \
+python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py --cfg configs/ecdysis.yaml \
+   --data-path "datasets/${DATASET}/" --tag "$2" --version "$THIS_VERSION" \
    --pretrain "${MODEL_PREFIX}/${LAST_VERSION}/best.pth" --ignore-user-warnings  # Avoid user warnings on logs
 wait
 curl -s "${MONITOR}?state=ok&msg=Training%20finished"
 
 # Evaluate trained model
-python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py \
+python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \
   --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval \
   --pretrain "${MODEL_PREFIX}/${THIS_VERSION}/best.pth"
 wait
@@ -72,7 +77,7 @@ echo "Syncing stats files..."
 
 # Compress backup of old model
 echo "Compressing old model..."
-tar --remove-files -zcvf "$MODEL_PREFIX/$LAST_VERSION.tar.gz" "$MODEL_PREFIX/${LAST_VERSION}-backup" || echo "Model backup does not exist, skipping compression"
+tar --remove-files -zcvf "$MODEL_PREFIX/$LAST_VERSION.tar.gz" "$MODEL_PREFIX/${LAST_VERSION}" || echo "Model backup does not exist, skipping compression"
 #rm -r "${MODEL_PREFIX:?}/${LAST_VERSION:?}" || echo "Model backup does not exist, skipping deletion"  # SC2115
 
 echo "All steps completed successfully"
