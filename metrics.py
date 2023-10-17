@@ -9,6 +9,9 @@ from sklearn.metrics import ConfusionMatrixDisplay
 from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, ConfusionMatrix, MetricCollection
 from yacs.config import CfgNode
 
+from datetime import datetime
+
+
 
 def get_model_metrics(config: CfgNode):
     """
@@ -51,7 +54,8 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, s
                   'Precision': tp / (tp + fp),
                   'Recall': tp / (tp + fn),
                   'F1': 2*tp / (2*tp + fp + fn),
-                  'Total samples': tp + fn}
+                  'Total samples': tp + fn
+                  }
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
@@ -100,7 +104,7 @@ def log_metrics(logger: logging.Logger, metrics: MetricCollection, aggregation: 
 
 def dump_summary(metrics: MetricCollection, config: CfgNode, dump: bool = False):
     """
-    Dump summary metrics to a yaml file
+    Dump summary metrics to a CSV file 'training_results.csv'
     """
 
     summary = {
@@ -112,7 +116,9 @@ def dump_summary(metrics: MetricCollection, config: CfgNode, dump: bool = False)
         'accuracy': round(metrics['Accuracy'].item(), 3),
         'precision': round(metrics['Precision'].item(), 3),
         'recall': round(metrics['Recall'].item(), 3),
-        'f1': round(metrics['F1Score'].item(), 3)
+        'f1': round(metrics['F1Score'].item(), 3),
+        # add date
+        'date': datetime.now().strftime("%Y-%m-%d")
     }
 
     if dump:

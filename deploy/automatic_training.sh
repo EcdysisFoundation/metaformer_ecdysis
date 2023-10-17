@@ -17,6 +17,8 @@ function failed () {
 }
 
 cd /home/ecdysis/MetaFormer/
+# Mount directories if needed
+bash deploy/mount_dirs.sh || true
 
 MONITOR="https://cronitor.link/p/29925306f8d947d4a1659c63083bb7c1/i5A0js"
 MODEL_PREFIX="output/ecdysis/$2"
@@ -25,17 +27,18 @@ MODEL_PREFIX="output/ecdysis/$2"
 curl -s "$MONITOR?state=run"
 
 DEPLOYED_VERSION=$(curl  "$1:8085/models/metaformer" -s | jq -r .[0].modelVersion)
-LAST_VERSION=$(find "output/ecdysis/$2" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort -r | head -n 1)
+# sort versions numerically
+LAST_VERSION=$(find "output/ecdysis/$2" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort -V -r | head -n 1)
 VERSION_MAJOR=$(echo "$LAST_VERSION" | cut -d. -f1)
 VERSION_MINOR=$(echo "$LAST_VERSION" | cut -d. -f2)
 THIS_VERSION=$VERSION_MAJOR.$((VERSION_MINOR + 1))
+echo "Last version: ${LAST_VERSION}"
+echo "This new version is: ${THIS_VERSION}"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "Found ${GPU_COUNT} GPU(s)"
 
 # Backup old model and dataset
-#BACKUP="$2_backup_$(date +%Y%m%d)"
-#mv "${MODEL_PREFIX}/$2" "${MODEL_PREFIX}/${BACKUP}" || echo "Model does not exist, skipping backup"
 DATASET="bugbox_$2"
 mv "datasets/${DATASET}" "datasets/${DATASET}_backup_$(date +%Y%m%d)" || echo "Dataset does not exist, nothing to backup"
 
@@ -56,7 +59,7 @@ curl -s "${MONITOR}?state=ok&msg=Training%20finished"
 
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \
-  --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval \
+  --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --version "$THIS_VERSION" --eval \
   --pretrain "${MODEL_PREFIX}/${THIS_VERSION}/best.pth"
 wait
 curl -s "$MONITOR?state=ok&msg=Evaluation%20finished"

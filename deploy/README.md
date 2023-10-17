@@ -47,6 +47,19 @@ bash deploy/automatic_training localhost morphospecies
 the training outputs will be stored in `./outouts/ecdysis/morphospecies` and the dataset in 
 `./datasets/bugbox_morphospecies`. The trained model will be published in the localhost Torchserve running instance.
 
+#### Test only training
+
+The script `test_training.sh` is a reduced version of `automatic_training.sh` that only runs the training/evaluation part to test functionality without performing any deployment. This expects a ecdysis_test.yaml file in the configs directory, that runs a single epoch. Since no deployment is performed the first parameter (the host name) is ignored.
+It will add a model and an entry to the train_results.csv in the selected directory.
+
+```commandline
+bash deploy/automatic_training localhost test_trainings
+```
+
+Likewise the script `test_naming.sh` with the same parameters only runs the version naming part
+
+
+
 #### Serve a model
 The `serve.sh` script archives and publish a model to a running Torchserve service. It is used inside 
 `automatic_training.sh`. Usage:
