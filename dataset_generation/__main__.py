@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
 
 def get_split_counts(splits, taxon_map):
+    """ Merge the split count with the morpho-species name """
     counts_df = get_count_per_class_split(splits)
     counts_df["id"] = counts_df["id"].astype(int)
     return taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
@@ -38,44 +39,48 @@ def get_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
+def main():
+    """ Generate a dataset from BugBox images """
+    args = get_args()
 
-args = get_args()
+    assert 0 < args.train_size <= 1, 'Train size must be between 0 and 1'
 
-assert 0 < args.train_size <= 1, 'Train size must be between 0 and 1'
+    bugbox_mnt = Path(args.bugbox_mnt)
+    refimage_dir = Path(f'{args.reference_image}')
+    dataset_dir = Path(f'datasets/{args.dataset_name}')
 
-bugbox_mnt = Path(args.bugbox_mnt)
-refimage_dir = Path(f'{args.reference_image}')
-dataset_dir = Path(f'datasets/{args.dataset_name}')
+    dataset_dir.mkdir(exist_ok=True, parents=True)
 
-dataset_dir.mkdir(exist_ok=True, parents=True)
+    db = BugBoxDB()
 
-db = BugBoxDB()
+    images = db.get_reviewed_images_df()
+    images['image'] = images['image'].apply(lambda x: str(bugbox_mnt / x))
 
-images = db.get_reviewed_images_df()
-images['image'] = images['image'].apply(lambda x: str(bugbox_mnt / x))
+    if args.drop_duplicates:
+        images = drop_identical_images(images)
 
-if args.drop_duplicates:
-    images = drop_identical_images(images)
+    if args.classification_method == 'GBIF':
+        refimages = db.get_reference_images_df()
+        refimages['image'] = refimages['image'].apply(lambda x: str(refimage_dir / x))
+    else:
+        refimages = None
 
-if args.classification_method == 'GBIF':
-    refimages = db.get_reference_images_df()
-    refimages['image'] = refimages['image'].apply(lambda x: str(refimage_dir / x))
-else:
-    refimages = None
-
-splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy, args.classification_method,
-              rank=args.taxon_rank, seed=SEED, refimages=refimages, min_images=args.minimum_images)
+    splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy, args.classification_method,
+                  rank=args.taxon_rank, seed=SEED, refimages=refimages, min_images=args.minimum_images)
 
 
-meta_file = dataset_dir/'metadata.csv'
-images.to_csv(meta_file, index=False)
+    meta_file = dataset_dir/'metadata.csv'
+    images.to_csv(meta_file, index=False)
 
-## This needs to be commented until the morphospecies table in production is populated
-taxon_map = db.get_morphospecies_df(columns=['id', 'name', 'taxon_id'])
-taxon_map.to_csv('deploy/taxon_map.csv', index=False)
+    ## This needs to be commented until the morphospecies table in production is populated
+    taxon_map = db.get_morphospecies_df(columns=['id', 'name', 'taxon_id'])
+    taxon_map.to_csv('deploy/taxon_map.csv', index=False)
 
-counts_df = get_split_counts(counts_df, taxon_map)
-count_file = dataset_dir / 'counts.csv'
-counts.to_csv(count_file, index=False)
+    counts_df = get_split_counts(splits, taxon_map)
+    count_file = dataset_dir / 'dataset_report.csv'
+    counts_df.to_csv(count_file, index=False)
 
-db.disconnect()
+    db.disconnect()
+
+# This gets executed when running `python -m dataset_generation`
+main()

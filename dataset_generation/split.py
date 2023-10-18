@@ -118,10 +118,11 @@ def remove_class(images: dict, class_name: str, target_class_name: str = 'incert
 
     """
     class_images = images.pop(class_name)
-
     if target_class_name in images:
+        # append to existing list
         images[target_class_name] += class_images
     else:
+        # class_images is already a list, so we don't need to create one
         images[target_class_name] = class_images
 
     return images
@@ -131,7 +132,7 @@ def filter_underrepresented(images: dict, threshold: int, target_class_name: str
     """
     Move all underrepresented classes to class 'incertae sedis'
     Args:
-        images: Dictionary of lists of image paths per class
+        images: Dictionary of lists of image paths per class (class_name/id: list of image paths)
         threshold: Minimum number of samples for the class to be considered as well represented
 
     Returns: Updated dictionary

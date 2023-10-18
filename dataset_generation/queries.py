@@ -11,7 +11,7 @@ images = Template(
 )
 
 images_with_taxon = Template(
-    f"""SELECT images.image, images.uuid AS specimen_id, m.name AS morhospecies, images.classification_id AS taxon_id, m.id AS morphospecie_id, t.order, t.family, t.genus
+    f"""SELECT images.image, images.uuid AS specimen_id, m.name AS morphospecies, images.classification_id AS taxon_id, m.id AS morphospecie_id, t.order, t.family, t.genus
     FROM ($image_query) AS images 
         JOIN taxon_app_taxon as t 
         ON classification_id = \"taxonID\"

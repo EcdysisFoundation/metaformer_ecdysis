@@ -57,6 +57,9 @@ python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 123
 wait
 curl -s "${MONITOR}?state=ok&msg=Training%20finished"
 
+# Copy dataset report from dataset to model folder
+cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
+
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \
   --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --version "$THIS_VERSION" --eval \

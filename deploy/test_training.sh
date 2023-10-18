@@ -36,12 +36,15 @@ python -m dataset_generation morphospecie --dataset-name "$DATASET" --train-size
 wait
 
 
+
 # Run training starting from last best checkpoint
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py --cfg configs/ecdysis_test.yaml \
    --data-path "datasets/${DATASET}/" --tag "$2" --version "$THIS_VERSION" \
    --pretrain "${MODEL_PREFIX}/${LAST_VERSION}/best.pth" --ignore-user-warnings  # Avoid user warnings on logs
 wait
 
+# Copy dataset report from dataset to model folder
+cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
 
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \
