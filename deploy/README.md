@@ -34,7 +34,7 @@ Torchserve service.
 3. Runs training using the new generated dataset.
 4. Evaluates performance.
 5. Serves the model calling `serve.sh`.
-6. Syncs the output stats files to `pool1/smb` shared directory.
+6. Syncs the output stats files to `pool1/smb` shared directory. This includes the evaluation result, the counts per split and class and which classes were below the threshold.
 7. Compresses old data to save storage space
 
 To execute the script you need to provide an address to the host running the Torchserve service (inference port 8084 and
