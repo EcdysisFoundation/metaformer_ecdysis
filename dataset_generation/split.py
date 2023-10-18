@@ -30,6 +30,7 @@ from tqdm import tqdm
 
 from dataset_generation.utils import save_yaml_file
 from . import SEED, TAXON_LEVELS, LOGGING_LEVEL
+from typing import List, Tuple, Dict
 
 
 logger = logging.getLogger(__name__)
@@ -135,14 +136,15 @@ def filter_underrepresented(images: dict, threshold: int, target_class_name: str
         images: Dictionary of lists of image paths per class (class_name/id: list of image paths)
         threshold: Minimum number of samples for the class to be considered as well represented
 
-    Returns: Updated dictionary
+    Returns: Updated dictionary, list of underrepresented classes
 
     """
+    underrepresented_list = []
     for class_name in list(images.keys()):
         if is_class_underrepresented(images, class_name, threshold):
             images = remove_class(images, class_name, target_class_name)
-
-    return images
+            underrepresented_list.append(class_name)
+    return images,underrepresented_list
 
 
 def save_class_images(splits: dict, class_name: str, output: Path = Path('datasets') / 'data',
@@ -326,19 +328,25 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
         df.replace('', np.nan, inplace=True)  # Handle empty strings
         df.dropna(subset=taxon_ranks, inplace=True)
         df['class_name'] = df[taxon_ranks].agg(' '.join, axis=1)
+        name_column = 'class_name'
         underrepresented_name = 0
     elif classification_method == 'morphospecie':
         df.replace('', np.nan, inplace=True)  # Handle empty strings
         df.dropna(subset=['morphospecie_id'], inplace=True)
         df['class_name'] = df['morphospecie_id']
+        name_column = "morphospecies"
         underrepresented_name = 3458
     else:
         raise ValueError(f'\"{classification_method}\" is not a valid classification method')
     # When using morphospecies class name here is actually the id of the class, converted to str, not the name
     images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented
     # Moves the underrepresented classes to incertae sedis
-    images = filter_underrepresented(images, kwargs.get('min_images', 20), underrepresented_name)
-
+    images, underrepresented_classes = filter_underrepresented(images, kwargs.get('min_images', 20), underrepresented_name)
+    
+    # Save which classes are replaced by incertae sedis and how many sample in total are in each class
+    underrepresented_df = df[df['class_name'].isin(underrepresented_classes)][[name_column]].value_counts().reset_index(name="total_samples").sort_values(["total_samples",name_column],ascending=[False,True])
+    underrepresented_df.to_csv(output / 'underrepresented_classes.csv',index=False)
+    
     splits = {}
 
 

@@ -11,10 +11,15 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
 
 def get_split_counts(splits, taxon_map):
-    """ Merge the split count with the morpho-species name """
+    """ 
+    Return the dataset sample count report
+    Merges the split count with the morpho-species name
+    """
     counts_df = get_count_per_class_split(splits)
     counts_df["id"] = counts_df["id"].astype(int)
-    return taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
+    counts_df = taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
+    counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
+    return counts_df.sort_values(by="name")
 
 def get_args() -> argparse.Namespace:
 
