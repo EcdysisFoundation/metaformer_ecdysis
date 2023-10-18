@@ -35,6 +35,7 @@ mv "datasets/${DATASET}" "datasets/${DATASET}_backup_$(date +%Y%m%d)" || echo "D
 python -m dataset_generation morphospecie --dataset-name "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
 wait
 
+mkdir "${MODEL_PREFIX}/${LAST_VERSION}
 
 
 # Run training starting from last best checkpoint
@@ -44,7 +45,8 @@ python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 123
 wait
 
 # Copy dataset report from dataset to model folder
-cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
+cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report_${$THIS_VERSION}.csv"
+cp "datasets/${DATASET}/underrepresented_classes.csv" "${MODEL_PREFIX}/${THIS_VERSION}/underrepresented_classes_${$THIS_VERSION}.csv"
 
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \

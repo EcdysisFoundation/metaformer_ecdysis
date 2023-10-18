@@ -297,7 +297,22 @@ def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.Data
         counts.append({"id":class_id,**{split_name: len(image_paths) for split_name, image_paths in split.items()}})
     return pd.DataFrame(counts)
 
+def generate_split_class_report(splits, taxon_map:pd.DataFrame):
+    """
+    Return the dataset sample count report
+    Merges the split count with the morpho-species name
 
+    Args:
+        splits: A dictionary of splits (Dict[str, List[str]])
+        taxon_map: A dataframe including the morpho-species name and id (pd.DataFrame)
+    Returns:
+        pd.DataFrame: A dataframe including  morpho-species name and the count of samples in each split (test, train, val)
+    """
+    counts_df = get_count_per_class_split(splits)
+    counts_df["id"] = counts_df["id"].astype(int)
+    counts_df = taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
+    counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
+    return counts_df.sort_values(by="name")
 
 def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool, classification_method: str,
                   refimages: pd.DataFrame = None, save_yaml: bool = True, seed: int = SEED, **kwargs):

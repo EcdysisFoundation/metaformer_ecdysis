@@ -58,7 +58,8 @@ wait
 curl -s "${MONITOR}?state=ok&msg=Training%20finished"
 
 # Copy dataset report from dataset to model folder
-cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
+cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report_${$THIS_VERSION}.csv"
+cp "datasets/${DATASET}/underrepresented_classes.csv" "${MODEL_PREFIX}/${THIS_VERSION}/underrepresented_classes_${$THIS_VERSION}.csv"
 
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \

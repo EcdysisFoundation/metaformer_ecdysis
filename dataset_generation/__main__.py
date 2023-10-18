@@ -4,22 +4,13 @@ from pathlib import Path
 
 from . import LOGGING_LEVEL, SEED, TAXON_LEVELS
 from .db import BugBoxDB
-from .split import split_from_df, get_count_per_class_split
+from .split import split_from_df, generate_split_class_report
 from .utils import drop_identical_images
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
 
-def get_split_counts(splits, taxon_map):
-    """ 
-    Return the dataset sample count report
-    Merges the split count with the morpho-species name
-    """
-    counts_df = get_count_per_class_split(splits)
-    counts_df["id"] = counts_df["id"].astype(int)
-    counts_df = taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
-    counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
-    return counts_df.sort_values(by="name")
+
 
 def get_args() -> argparse.Namespace:
 
@@ -77,15 +68,15 @@ def main():
     meta_file = dataset_dir/'metadata.csv'
     images.to_csv(meta_file, index=False)
 
-    ## This needs to be commented until the morphospecies table in production is populated
     taxon_map = db.get_morphospecies_df(columns=['id', 'name', 'taxon_id'])
     taxon_map.to_csv('deploy/taxon_map.csv', index=False)
 
-    counts_df = get_split_counts(splits, taxon_map)
-    count_file = dataset_dir / 'dataset_report.csv'
-    counts_df.to_csv(count_file, index=False)
+    report_count_df = generate_split_class_report(splits, taxon_map)
+    report_count_df.to_csv(dataset_dir / 'dataset_report.csv', index=False)
 
     db.disconnect()
 
+
 # This gets executed when running `python -m dataset_generation`
-main()
+if __name__ == '__main__':
+    main()
