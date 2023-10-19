@@ -1,0 +1,8 @@
+pg_host = 'localhost'
+pg_port = 5432
+pg_user = 'database_user'
+pg_password = 'password_user'
+db = 'bugbox_database_name'
+server = 'hostname_of_deployment_server'
+ssh_username = 'unix_user'
+ssh_password = 'unix_user_password'
