@@ -3,6 +3,7 @@
 # Parameters:
 # $1: model TAG
 # $2: model VERSION
+# $3: endpoint to send the JSON stats
 
 MODEL_PREFIX="output/ecdysis/$1"
 DST="/pool1/smb/metaformer-stats"
@@ -14,3 +15,6 @@ cp "${MODEL_PREFIX}/$2/stats_$2.csv" "${DST}/$2/"
 cp "${MODEL_PREFIX}/$2/dataset_report_$2.csv" "${DST}/$2/"
 cp "${MODEL_PREFIX}/$2/underrepresented_classes_$2.csv" "${DST}/$2/"
 cp "${MODEL_PREFIX}/$2/cmatrix_$2.png" "${DST}/$2/"
+
+# send JSON
+curl -X POST -H "Content-Type: application/json" -d @${MODEL_PREFIX}/$2/stats_$2.json $3

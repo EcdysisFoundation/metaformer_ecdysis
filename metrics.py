@@ -32,6 +32,25 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
+def save_json_stats(metrics: MetricCollection, class_ids: List, output: Path,id_column:str):
+    """
+    Get and save per class statistics
+    Args:
+        metrics: torchmetrics collection, has to have a `StatScores` metric
+        class_ids: List of class or morphospecies ids
+        output_dir: Output directory path
+        id_column: Name of the column to use for the ids
+
+    Returns: Statistics data frame with fields: precision, recall, total, f1, id_column (morphospecie_id)
+    """
+    # get JSON stats using the ids instead of the names
+    json_stats_df = get_stats(metrics, class_ids, None,save_csv=False)
+    json_stats_df.rename(columns={'name':id_column}, inplace=True)
+    json_stats_df = json_stats_df[['precision','recall','total','f1',id_column]]
+    # [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
+    json_stats_df.to_json(output, orient='records')
+    return json_stats_df
+
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
     """

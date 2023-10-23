@@ -22,7 +22,7 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from data.build import build_dataset
-from metrics import get_model_metrics, get_stats, log_metrics, plot_confusion_matrix, dump_summary
+from metrics import get_model_metrics, get_stats,save_json_stats, log_metrics, plot_confusion_matrix, dump_summary
 from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -330,7 +330,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         lr = optimizer.param_groups[0]['lr']
         tb_logger.add_scalar('train/lr', lr, global_step=step)
 
-
+def save_stats_json()
 
 @torch.no_grad()
 def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
@@ -415,8 +415,13 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
     if config.EVAL_MODE and dist.get_rank() == 0:
-        class_names = pd.read_csv('deploy/taxon_map.csv', index_col='id').loc[map(int, config.DATA.CLASS_NAMES), 'name']
+        classes_df =  pd.read_csv('deploy/taxon_map.csv', index_col='id')
+        id_column = 'morphospecie_id' if 'morphospecie_id' in classes_df.columns else 'id'
+        class_ids = classes_df[map(int, config.DATA.CLASS_NAMES),id_column]
+        class_names = classes_df.loc[map(int, config.DATA.CLASS_NAMES), 'name']
+        # get CSV stats using the names
         stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
+        save_json_stats(metric,class_ids,Path(config.OUTPUT)/f'stats_{config.VERSION}.json',id_column)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
         plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)

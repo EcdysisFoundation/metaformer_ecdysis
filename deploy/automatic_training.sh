@@ -21,6 +21,7 @@ cd /home/ecdysis/MetaFormer/
 bash deploy/mount_dirs.sh || true
 
 MONITOR="https://cronitor.link/p/29925306f8d947d4a1659c63083bb7c1/i5A0js"
+EVAL_POST_URL="$1:8000/ai/"
 MODEL_PREFIX="output/ecdysis/$2"
 
 # Send started signal
@@ -80,7 +81,7 @@ else
 fi
 
 echo "Syncing stats files..."
-. ./deploy/sync_results.sh "$2" "$THIS_VERSION"
+. ./deploy/sync_results.sh "$2" "$THIS_VERSION" "$EVAL_POST_URL"
 
 # Compress backup of old model
 echo "Compressing old model..."
