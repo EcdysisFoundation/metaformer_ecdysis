@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 from dataset_generation.split import get_count_per_class_split
 
 def test_count():

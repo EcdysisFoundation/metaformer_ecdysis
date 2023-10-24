@@ -33,27 +33,41 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def save_json_stats(metrics: MetricCollection, class_ids: List, output: Path,id_column:str,version:str):
+def get_json_stats(stats_df: pd.DataFrame,id_column:str,version:str,output: Path = None):
     """
-    Get and save per class statistics
+    Return and optionally save per class statistics in JSON format with morphospecie id
     Args:
-        metrics: torchmetrics collection, has to have a `StatScores` metric
-        class_ids: List of class or morphospecies ids
-        output: Output json filename path, if not set it will not be saved
+        stats_df: Output of get_stats_with_ids
         id_column: Name of the column to use for the ids
+        output: Output json filename path, if not set it will not be saved
 
     Returns: Statistics data frame with fields: precision, recall, total, f1, id_column (morphospecie_id)
     """
     # get JSON stats using the ids instead of the names
-    json_stats_df = get_stats(metrics, class_ids, None,save_csv=False)
-    json_stats_df.rename(columns={'name':id_column}, inplace=True)
-    json_stats_df = json_stats_df[['precision','recall','total','f1',id_column]]
-    # [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
-    result = {"version":str(version),"data":json_stats_df.to_dict(orient='records')}
+    # all fields in the json are in lower case
+    stats_df.rename(columns={c:c.lower() for c in stats_df.columns}, inplace=True)
+    # name -> morphospecie_id, total samples -> total
+    stats_df.rename(columns={'name':id_column,'total samples':'total'}, inplace=True)
+    # reorder columns and keep only the required ones
+    stats_df = stats_df[['precision','recall','total','f1',id_column]]
+    # orient='records' is [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
+    # result adds the version field and puts the report inside data
+    result = {"version":str(version),"data":stats_df.to_dict(orient='records')}
     if output:
         with open(output, 'w') as f:
             json.dump(result, f)
     return result
+
+def get_stats_with_ids(metrics: MetricCollection, class_ids: List):
+    """
+    Get per class statistics with the list of class_ids instead of the class names
+    (This method is separated for testability)
+    Args:
+        metrics: torchmetrics collection, has to have a `StatScores` metric
+        class_ids: List of class or morphospecies ids
+    Returns: Statistics data frame with stats fields
+    """
+    return get_stats(metrics, class_ids, None,save_csv=False)
 
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
