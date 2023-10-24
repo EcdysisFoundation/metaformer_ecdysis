@@ -11,6 +11,7 @@ from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, Confu
 from yacs.config import CfgNode
 
 from datetime import datetime
+from utils import save_json
 
 
 
@@ -54,8 +55,7 @@ def get_json_stats(stats_df: pd.DataFrame,id_column:str,version:str,output: Path
     # result adds the version field and puts the report inside data
     result = {"version":str(version),"data":stats_df.to_dict(orient='records')}
     if output:
-        with open(output, 'w') as f:
-            json.dump(result, f)
+        save_json(result,output)
     return result
 
 def get_stats_with_ids(metrics: MetricCollection, class_ids: List):

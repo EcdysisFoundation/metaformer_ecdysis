@@ -1,5 +1,6 @@
 import pandas as pd
-import unittest
+import unittest, logging
+import json
 
 from metrics import get_json_stats
 
@@ -10,7 +11,7 @@ def get_expected_data() -> dict:
         "data":[
             {
                 "precision":0.38,
-                "recall":1,
+                "recall":1.0,
                 "total":5000,
                 "f1":0.56,
                 "morphospecie_id":10
@@ -37,7 +38,7 @@ def get_test_data() -> pd.DataFrame:
             "TN": 3377,
             "FN": 13,
             "Precision":0.38,
-            "Recall":1,
+            "Recall":1.0,
             "F1":0.56,
             "Total samples": 5000
         },
@@ -61,13 +62,14 @@ class TestGetJsonStats(unittest.TestCase):
     def test_get_json_stats(self):
         # Arrange
         df = get_test_data()
-        id_column = "morphospecies_id"
+        id_column = "morphospecie_id"
         version = "2.0"
         
-        result = get_json_stats(df, id_column, version)
-        
-        expected_result = get_expected_data()
-        self.assertEqual(result, expected_result)
+        result = json.dumps(get_json_stats(df, id_column, version),indent=4)
+        expected_result = json.dumps(get_expected_data(),indent=4)
+        logging.warning(f"Expected data is:\n{expected_result}")
+        logging.warning(f"Result is:\n{result }")
+        self.assertEqual(result,expected_result)
 
 if __name__ == '__main__':
     unittest.main()

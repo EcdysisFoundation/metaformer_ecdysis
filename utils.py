@@ -169,3 +169,7 @@ def load_ext(name, funcs):
     return ext
 
 
+def save_json(data:dict,path,sort_keys=False):
+    """ Save Dict to disk as JSON with pretty print """
+    with open(path,'w') as f:
+        json.dump(data,indent=2,sort_keys=sort_keys)
