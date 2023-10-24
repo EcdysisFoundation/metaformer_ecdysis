@@ -22,7 +22,7 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from data.build import build_dataset
-from metrics import get_json_stats, get_model_metrics, get_stats, get_stats_with_ids, log_metrics, plot_confusion_matrix, dump_summary
+from metrics import get_json_stats, get_model_metrics, get_stats, get_stats_with_ids, stats_to_json, log_metrics, plot_confusion_matrix, dump_summary
 from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -420,7 +420,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         # get CSV stats using the names
         stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
         json_stats = get_stats_with_ids(metric,class_ids)
-        get_json_stats(json_stats,id_column,output=Path(config.OUTPUT)/f'stats_{config.VERSION}.json')
+        stats_to_json(json_stats,id_column,output=Path(config.OUTPUT)/f'stats_{config.VERSION}.json')
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
         plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)

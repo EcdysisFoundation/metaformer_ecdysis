@@ -34,9 +34,9 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def get_json_stats(stats_df: pd.DataFrame,id_column:str,version:str,output: Path = None):
+def stats_to_json(stats_df: pd.DataFrame,id_column:str,version:str,output: Path = None):
     """
-    Return and optionally save per class statistics in JSON format with morphospecie id
+    Return and optionally save per class statistics in JSON format (in the requested format) with morphospecie id
     Args:
         stats_df: Output of get_stats_with_ids
         id_column: Name of the column to use for the ids

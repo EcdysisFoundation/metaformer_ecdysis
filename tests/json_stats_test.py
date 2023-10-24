@@ -2,7 +2,7 @@ import pandas as pd
 import unittest, logging
 import json
 
-from metrics import get_json_stats
+from metrics import stats_to_json
 
 def get_expected_data() -> dict:
     """ Return expected result of the example """
@@ -65,7 +65,7 @@ class TestGetJsonStats(unittest.TestCase):
         id_column = "morphospecie_id"
         version = "2.0"
         
-        result = json.dumps(get_json_stats(df, id_column, version),indent=4)
+        result = json.dumps(stats_to_json(df, id_column, version),indent=4)
         expected_result = json.dumps(get_expected_data(),indent=4)
         logging.warning(f"Expected data is:\n{expected_result}")
         logging.warning(f"Result is:\n{result }")
