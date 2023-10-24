@@ -22,7 +22,7 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from data.build import build_dataset
-from metrics import get_json_stats, get_model_metrics, get_stats, get_stats_with_ids, stats_to_json, log_metrics, plot_confusion_matrix, dump_summary
+from metrics import get_json_stats, get_model_metrics, get_stats, log_metrics, plot_confusion_matrix, dump_summary
 from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -413,14 +413,23 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
     if config.EVAL_MODE and dist.get_rank() == 0:
+        # taxon map contents are for example:
+        # id,name,taxon_id 
+        # 3480,Gracillariidae 007,9103399
+        # where id is morphospecie id
         classes_df =  pd.read_csv('deploy/taxon_map.csv', index_col='id')
-        id_column = 'morphospecie_id' if 'morphospecie_id' in classes_df.columns else 'id'
-        class_ids = classes_df[map(int, config.DATA.CLASS_NAMES),id_column]
+        logging.warning(f"Columns and first entry are:\n{classes_df.head(1)}")
+        id_column = 'morphospecie_id'
+        # get class ids and names in the same order as in the dataset
+        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].index.astype(int)
         class_names = classes_df.loc[map(int, config.DATA.CLASS_NAMES), 'name']
         # get CSV stats using the names
         stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
-        json_stats = get_stats_with_ids(metric,class_ids)
-        stats_to_json(json_stats,id_column,output=Path(config.OUTPUT)/f'stats_{config.VERSION}.json')
+        # We saved the split info on a CSV
+        split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
+        split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
+        json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
+        get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
         plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)

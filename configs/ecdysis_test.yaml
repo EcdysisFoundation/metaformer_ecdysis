@@ -17,8 +17,8 @@ TRAIN:
   USE_CHECKPOINT: True  # Mandatory for handling batches of 4 images
   EPOCHS: 1
   BASE_LR: 16e-4
-  MIN_LR: 16e-6
-  WARMUP_EPOCHS: 5
+  MIN_LR: 16e-5
+  WARMUP_EPOCHS: 1
   SAMPLER: 'weighted'
   EARLY_STOP:
     MIN_EPOCHS: 80

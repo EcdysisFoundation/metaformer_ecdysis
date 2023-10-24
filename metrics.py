@@ -14,7 +14,6 @@ from datetime import datetime
 from utils import save_json
 
 
-
 def get_model_metrics(config: CfgNode):
     """
     Get metric collection for model training and evaluation
@@ -34,40 +33,53 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def stats_to_json(stats_df: pd.DataFrame,id_column:str,version:str,output: Path = None):
+def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> dict: 
     """
-    Return and optionally save per class statistics in JSON format (in the requested format) with morphospecie id
+    Get and save per class statistics
     Args:
-        stats_df: Output of get_stats_with_ids
-        id_column: Name of the column to use for the ids
-        output: Output json filename path, if not set it will not be saved
-
-    Returns: Statistics data frame with fields: precision, recall, total, f1, id_column (morphospecie_id)
+        metrics: torchmetrics collection, has to have a `StatScores` metric
+    Returns:
+        dict[str,numpy array]
     """
-    # get JSON stats using the ids instead of the names
-    # all fields in the json are in lower case
-    stats_df.rename(columns={c:c.lower() for c in stats_df.columns}, inplace=True)
-    # name -> morphospecie_id, total samples -> total
-    stats_df.rename(columns={'name':id_column,'total samples':'total'}, inplace=True)
-    # reorder columns and keep only the required ones
-    stats_df = stats_df[['precision','recall','total','f1',id_column]]
+    stats = metrics['StatScores']
+    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
+    
+    return {'TP': tp,
+            'FP': fp,
+            'TN': tn,
+            'FN': fn,
+            'Precision': tp / (tp + fp),
+            'Recall': tp / (tp + fn),
+            'F1': 2*tp / (2*tp + fp + fn),
+            total_column_name: tp + fn
+           }
+
+
+def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
+    """
+    Get and save per class statistics in JSON format
+    Args:
+        metrics: torchmetrics collection, has to have a `StatScores` metric
+        class_ids: List of class ids in the same order
+        id_name: Name to use for the class ids
+        output: Output JSON path if set
+
+    Returns: Statistics data frame
+    """
+    stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total").items()}
+    stats = pd.DataFrame(data=stats_data).fillna(0)
+    stats[id_name] = class_ids
+    logging.warning(f"\n{stats.head(1)}")
+    if split_df is not None:
+        stats = stats.merge(split_df[["id","train","test","val"]],how="left",left_on="morphospecie_id",right_on="id").drop("id",axis=1)
+    logging.warning(f"\n{stats.head(1)}")
+
     # orient='records' is [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
     # result adds the version field and puts the report inside data
-    result = {"version":str(version),"data":stats_df.to_dict(orient='records')}
+    result = {"version":str(version),"data":stats.to_dict(orient='records')}
     if output:
         save_json(result,output)
     return result
-
-def get_stats_with_ids(metrics: MetricCollection, class_ids: List):
-    """
-    Get per class statistics with the list of class_ids instead of the class names
-    (This method is separated for testability)
-    Args:
-        metrics: torchmetrics collection, has to have a `StatScores` metric
-        class_ids: List of class or morphospecies ids
-    Returns: Statistics data frame with stats fields
-    """
-    return get_stats(metrics, class_ids, None,save_csv=False)
 
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
@@ -81,18 +93,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, s
 
     Returns: Statistics data frame
     """
-    stats = metrics['StatScores']
-    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
-
-    stats_data = {'TP': tp,
-                  'FP': fp,
-                  'TN': tn,
-                  'FN': fn,
-                  'Precision': tp / (tp + fp),
-                  'Recall': tp / (tp + fn),
-                  'F1': 2*tp / (2*tp + fp + fn),
-                  'Total samples': tp + fn
-                  }
+    stats_data = _get_stats_from_metrics(metrics,'Total samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
