@@ -330,8 +330,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         lr = optimizer.param_groups[0]['lr']
         tb_logger.add_scalar('train/lr', lr, global_step=step)
 
-def save_stats_json()
-
 @torch.no_grad()
 def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
     """

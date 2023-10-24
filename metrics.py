@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 from pathlib import Path
 from typing import List
@@ -32,13 +33,13 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def save_json_stats(metrics: MetricCollection, class_ids: List, output: Path,id_column:str):
+def save_json_stats(metrics: MetricCollection, class_ids: List, output: Path,id_column:str,version:str):
     """
     Get and save per class statistics
     Args:
         metrics: torchmetrics collection, has to have a `StatScores` metric
         class_ids: List of class or morphospecies ids
-        output_dir: Output directory path
+        output: Output json filename path, if not set it will not be saved
         id_column: Name of the column to use for the ids
 
     Returns: Statistics data frame with fields: precision, recall, total, f1, id_column (morphospecie_id)
@@ -48,8 +49,11 @@ def save_json_stats(metrics: MetricCollection, class_ids: List, output: Path,id_
     json_stats_df.rename(columns={'name':id_column}, inplace=True)
     json_stats_df = json_stats_df[['precision','recall','total','f1',id_column]]
     # [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
-    json_stats_df.to_json(output, orient='records')
-    return json_stats_df
+    result = {"version":str(version),"data":json_stats_df.to_dict(orient='records')}
+    if output:
+        with open(output, 'w') as f:
+            json.dump(result, f)
+    return result
 
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
