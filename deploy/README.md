@@ -60,7 +60,7 @@ Torchserve service.
 ```
 Where train, test, and val are the counts for that morphospecie for each split, tp,fp,tn,fn,precision, recall and f1 are the results of the evaluation, and total=train+test+val.
 
-7. Compresses old data to save storage space
+8. Compresses old data to save storage space
 
 To execute the script you need to provide an address to the host running the Torchserve service (inference port 8084 and
 8085 for management) and a name for the new model. For example, if the following is executed:
