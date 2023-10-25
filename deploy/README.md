@@ -32,9 +32,34 @@ Torchserve service.
 1. Backs up the last dataset and model.
 2. Generates a new dataset from BugBox images.
 3. Runs training using the new generated dataset.
-4. Evaluates performance.
+4. Evaluates performance on the test split.
 5. Serves the model calling `serve.sh`.
 6. Syncs the output stats files to `pool1/smb` shared directory. This includes the evaluation result, the counts per split and class and which classes were below the threshold.
+7. Sends a JSON containing the data from the previous per-class reports to an endpoint in the following format:
+```json
+{
+  "version": "1.18",
+  "data": [
+    {
+      "tp": int,
+      "fp": int,
+      "tn": int,
+      "fn": int,
+      "precision": float,
+      "recall": float,
+      "f1": float,
+      "total": int,
+      "morphospecie_id": int,
+      "train": int,
+      "test": int,
+      "val": int
+    },
+    ...
+  ]
+}
+```
+Where train, test, and val are the counts for that morphospecie for each split, tp,fp,tn,fn,precision, recall and f1 are the results of the evaluation, and total=train+test+val.
+
 7. Compresses old data to save storage space
 
 To execute the script you need to provide an address to the host running the Torchserve service (inference port 8084 and

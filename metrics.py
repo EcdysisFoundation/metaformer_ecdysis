@@ -35,11 +35,12 @@ def get_model_metrics(config: CfgNode):
 
 def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> dict: 
     """
-    Get and save per class statistics
+    Get per class statistics
     Args:
         metrics: torchmetrics collection, has to have a `StatScores` metric
+        total_column_name: name of the field with the total evaluation sample count
     Returns:
-        dict[str,numpy array]
+        dict[str,numpy array] 
     """
     stats = metrics['StatScores']
     tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
@@ -54,8 +55,14 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
             total_column_name: tp + fn
            }
 
+def _check_test_count(row):
+    """ Aux method which returns True if test count from the split is different from test count from the evaluation """
+    if row["test"] != row["total_test"]:
+        logging.error(f"Different test count:\n{dict(row)}")
+        return True
+    return False
 
-def get_json_stats(metrics: MetricCollection, class_ids: List,class_names:List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
+def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
     """
     Get and save per class statistics in JSON format
     Args:
@@ -71,25 +78,25 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,class_names:List,v
     stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total_test").items()}
     stats = pd.DataFrame(data=stats_data).fillna(0)
     stats[id_name] =list(class_ids)
-    stats["class_name"] = list(class_names)
     # Debug before and after
-    logging.warning(f"Before splits merge:\n{stats.head(3)}")
+    logging.info(f"Before splits merge:\n{stats.head(3)}")
     if split_df is not None:
-        logging.warning(f"Split df:\n{split_df.head(3)}")
-        # will merge with the name for now, for debugging purposes
+        logging.info(f"Split df:\n{split_df.head(3)}")
+        # will merge with the name, for debugging purposes
         stats = stats.merge(split_df[["id","name","train","test","val","total_samples"]],how="left",left_on="morphospecie_id",right_on="id")
-    logging.warning(f"After splits merge:\n{stats.head(3)}")
+    logging.info(f"After splits merge:\n{stats.head(3)}")
 
     # verify that total_test == test, as as check. 
-    # If there are invalid images there may be a legit difference but they should be quite rare.
-    for i,row in stats.iterrows():
-        if row["test"] != row["total_test"]:
-            logging.error(f"Different test count:\n{dict(row)}")
-    stats.rename(columns={"total_samples":"total"})
-    # drop total_test column, the total we want is train+test+val
-    #stats.drop(["total_test","name"],inplace=True) # keep for now for debugging
+    if stats.apply(lambda row: _check_test_count(row), axis=1).any():
+        logging.error("Different test count, see above.")
+    else:
+        logging.warning("Expected and actual test count are the same (OK).")
 
-    # orient='records' is [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
+    stats.rename(columns={"total_samples":"total"},inplace=True)
+    # drop total_test column (which is only test), the total we want is train+test+val
+    stats.drop(["total_test","name","id"],inplace=True,axis=1,errors='raise') #remove debug columns
+
+    # orient='records' follows the format [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
     # result adds the version field and puts the report inside data
     result = {"version":str(version),"data":stats.to_dict(orient='records')}
     if output:
