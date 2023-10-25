@@ -40,7 +40,7 @@ def upload_json(json_file: str, url:str):
 
 def parse_arguments():
     """ Parse command line arguments """
-    parser = argparse.ArgumentParser(description="Sends report data to the endpoint")
+    parser = argparse.ArgumentParser(description="Sends the report JSON data to the endpoint")
     parser.add_argument('--json', required=True, help='Path to the JSON file')
     parser.add_argument('--url', required=True, help='URL of the REST endpoint')
     return parser.parse_args()
