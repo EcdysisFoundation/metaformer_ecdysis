@@ -28,7 +28,8 @@ echo "Found ${GPU_COUNT} GPU(s)"
 #BACKUP="$2_backup_$(date +%Y%m%d)"
 #mv "${MODEL_PREFIX}/$2" "${MODEL_PREFIX}/${BACKUP}" || echo "Model does not exist, skipping backup"
 DATASET="bugbox_$2"
-mv "datasets/${DATASET}" "datasets/${DATASET}_backup_$(date +%Y%m%d)" || echo "Dataset does not exist, nothing to backup"
+DATASET_BACKUP="datasets/${DATASET}_backup_$(date +%Y%m%d_%H%M%S)"
+mv "datasets/${DATASET}" "${DATASET_BACKUP}" || echo "Dataset does not exist, nothing to backup"
 
 
 # Update datasaet

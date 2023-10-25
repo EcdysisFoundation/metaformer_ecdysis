@@ -5,13 +5,14 @@
 
 set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
 
+
 # Cleanup on error and send failed signal
 function failed () {
   echo "The script failed, reverting changes..."
 #  mv "${MODEL_PREFIX}/${BACKUP}" "${MODEL_PREFIX}/$1" || echo "Reverting model failed"
   rm -r "datasets/${DATASET}"
-  echo "Renaming datasets/${DATASET}_backup_$(date +%Y%m%d) to datasets/${DATASET}" 
-  mv "datasets/${DATASET}_backup_$(date +%Y%m%d)" "datasets/${DATASET}" || true
+  echo "Renaming datasets/${DATASET_BACKUP} to datasets/${DATASET}" 
+  mv "${DATASET_BACKUP}" "datasets/${DATASET}" || true
   tar --remove-files -zcvf "${MODEL_PREFIX}/${THIS_VERSION}_failed.tar.gz" "${MODEL_PREFIX}/${THIS_VERSION}" || true
   curl -s "$MONITOR?state=fail"
 }
@@ -41,7 +42,8 @@ echo "Found ${GPU_COUNT} GPU(s)"
 
 # Backup old model and dataset
 DATASET="bugbox_$2"
-mv "datasets/${DATASET}" "datasets/${DATASET}_backup_$(date +%Y%m%d)" || echo "Dataset does not exist, nothing to backup"
+DATASET_BACKUP="datasets/${DATASET}_backup_$(date +%Y%m%d_%H%M%S)"
+mv "datasets/${DATASET}" "${DATASET_BACKUP}" || echo "Dataset does not exist, nothing to backup"
 
 trap failed ERR
 

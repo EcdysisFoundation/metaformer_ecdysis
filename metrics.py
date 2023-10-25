@@ -55,7 +55,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
            }
 
 
-def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
+def get_json_stats(metrics: MetricCollection, class_ids: List,class_names:List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
     """
     Get and save per class statistics in JSON format
     Args:
@@ -66,13 +66,28 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
 
     Returns: Statistics data frame
     """
-    stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total").items()}
+
+    pd.set_option('display.max_columns', None)  # show all columns in the head() method
+    stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total_test").items()}
     stats = pd.DataFrame(data=stats_data).fillna(0)
-    stats[id_name] = class_ids
-    logging.warning(f"\n{stats.head(1)}")
+    stats[id_name] =list(class_ids)
+    stats["class_name"] = list(class_names)
+    # Debug before and after
+    logging.warning(f"Before splits merge:\n{stats.head(3)}")
     if split_df is not None:
-        stats = stats.merge(split_df[["id","train","test","val"]],how="left",left_on="morphospecie_id",right_on="id").drop("id",axis=1)
-    logging.warning(f"\n{stats.head(1)}")
+        logging.warning(f"Split df:\n{split_df.head(3)}")
+        # will merge with the name for now, for debugging purposes
+        stats = stats.merge(split_df[["id","name","train","test","val","total_samples"]],how="left",left_on="morphospecie_id",right_on="id")
+    logging.warning(f"After splits merge:\n{stats.head(3)}")
+
+    # verify that total_test == test, as as check. 
+    # If there are invalid images there may be a legit difference but they should be quite rare.
+    for i,row in stats.iterrows():
+        if row["test"] != row["total_test"]:
+            logging.error(f"Different test count:\n{dict(row)}")
+    stats.rename(columns={"total_samples":"total"})
+    # drop total_test column, the total we want is train+test+val
+    #stats.drop(["total_test","name"],inplace=True) # keep for now for debugging
 
     # orient='records' is [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
     # result adds the version field and puts the report inside data
