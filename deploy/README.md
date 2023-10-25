@@ -41,6 +41,10 @@ Torchserve service.
   "version": "1.18",
   "data": [
     {
+      "train": int,
+      "test": int,
+      "val": int,
+      "total": int,
       "tp": int,
       "fp": int,
       "tn": int,
@@ -48,11 +52,7 @@ Torchserve service.
       "precision": float,
       "recall": float,
       "f1": float,
-      "total": int,
-      "morphospecie_id": int,
-      "train": int,
-      "test": int,
-      "val": int
+      "morphospecie_id": int      
     },
     ...
   ]

@@ -62,14 +62,15 @@ def _check_test_count(row):
         return True
     return False
 
-def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None):
+def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None,display=3):
     """
     Get and save per class statistics in JSON format
     Args:
         metrics: torchmetrics collection, has to have a `StatScores` metric
-        class_ids: List of class ids in the same order
+        class_ids: List of class ids in the same order as the dataset
         id_name: Name to use for the class ids
         output: Output JSON path if set
+        split_df: Dataframe with the dataset split report
 
     Returns: Statistics data frame
     """
@@ -79,12 +80,14 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
     stats = pd.DataFrame(data=stats_data).fillna(0)
     stats[id_name] =list(class_ids)
     # Debug before and after
-    logging.info(f"Before splits merge:\n{stats.head(3)}")
+    logging.debug(f"Before splits merge:\n{stats.head(display)}")
     if split_df is not None:
-        logging.info(f"Split df:\n{split_df.head(3)}")
+        logging.debug(f"Split df:\n{split_df.head(display)}")
         # will merge with the name, for debugging purposes
-        stats = stats.merge(split_df[["id","name","train","test","val","total_samples"]],how="left",left_on="morphospecie_id",right_on="id")
-    logging.info(f"After splits merge:\n{stats.head(3)}")
+        split_df = split_df[["id","name","train","test","val","total_samples"]]
+        # They should have the same classes, but let's use left to catch any issues
+        stats = split_df.merge(stats,how="left",right_on="morphospecie_id",left_on="id")
+    logging.debug(f"After splits merge:\n{stats.head(display)}")
 
     # verify that total_test == test, as as check. 
     if stats.apply(lambda row: _check_test_count(row), axis=1).any():
@@ -100,6 +103,7 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
     # result adds the version field and puts the report inside data
     result = {"version":str(version),"data":stats.to_dict(orient='records')}
     if output:
+        # Save the JSON to later send it to the endpoint
         save_json(result,output)
     return result
 

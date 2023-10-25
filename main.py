@@ -418,21 +418,21 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         # 3480,Gracillariidae 007,9103399
         # where id is morphospecie id
         id_column = 'morphospecie_id'
+        display = 3 # how many entries to display for debug purposes
         classes_df =  pd.read_csv('deploy/taxon_map.csv', index_col='id')
-        logger.info(f"Columns and first entries are:\n{classes_df.head(3)}")
-        logger.info(f"First class names are:\n{list(config.DATA.CLASS_NAMES)[:3]}")
+        logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
+        logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
         # get class ids and names in the same order as in the dataset
         class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()["id"]
         class_names = classes_df.loc[map(int, config.DATA.CLASS_NAMES), 'name']
-        logger.info(f"First class_names are:\n{list(class_names)[:3]}")
-        logger.info(f"First class_ids are:\n{list(class_ids)[:3]}")
+        logger.info(f"First class_names :\n{list(class_names[:display])}")
         # get CSV stats using the names
         stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
         # We saved the split info on a CSV
         split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
-        logging.warning(f"Length Class ids: {len(class_ids)}, names: {len(class_names)}.")
-        logging.warning(f"Length Split df: {len(split_df)}, Stats df: {len(stats)}")
+        logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
+        logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
         json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
         get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
