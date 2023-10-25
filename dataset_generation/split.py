@@ -286,6 +286,15 @@ def split_from_directory(root: Path, output: Path, train_size: float, depth: int
 def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.DataFrame:
     """
     Get the number of images per class in each split
+    splits has the following format (as in the splits.yaml file)
+    {
+     '99': {
+            'test': [  '/path/to/test_image1_for_class_99.jpg',... ],
+            'train': [  '/path/to/train_image1_for_class_99.jpg',...  ],
+            'val': [  '/path/to/val_image1_for_class_99.jpg', ...]
+        },
+        ...
+    }
     Args:
         splits: Dictionary of lists of image paths per split, the key is the class name, the value is a dict of split, list of image path of that split and class
     Returns:
