@@ -17,5 +17,5 @@ cp "${MODEL_PREFIX}/$2/underrepresented_classes_$2.csv" "${DST}/$2/"
 cp "${MODEL_PREFIX}/$2/cmatrix_$2.png" "${DST}/$2/"
 
 # send JSON
-#curl -X POST -H "Content-Type: application/json" -d @${MODEL_PREFIX}/$2/stats_$2.json $3
-python send_report.py --json ${MODEL_PREFIX}/$2/stats_$2.json $3
+
+python deploy/send_report.py "${MODEL_PREFIX}/$2/stats_$2.json" $3 || true
