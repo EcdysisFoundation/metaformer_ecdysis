@@ -16,7 +16,9 @@ def upload_json(json_file: str, url:str):
     with open(json_file) as file:
         json_data = json.load(file)
     item_count = len(json_data["data"])
-
+    if not url.startswith("http://"):
+        url = "http://" + url
+    logging.warning(f"Sending {item_count} elements...")
     # Make the POST request to the REST endpoint
     response = requests.post(url, json=json_data)
 
@@ -27,22 +29,22 @@ def upload_json(json_file: str, url:str):
             added_items = response_data.get('added')
             # validate response
             if added_items is not None:
-                if added_items != item_count:
-                    logging.info(f"{response.status_code}: {item_count} entries added (OK).")
+                if added_items == item_count:
+                    logging.warning(f"{response.status_code}: {item_count} entries added (OK).")
                 else:
                     raise ValueError(f"{response.status_code}: Received {added_items}, expected {item_count}")
             else:
                 raise ValueError(f"{response.status_code}: No 'added' key in reply:\n{response_data}")
         except json.JSONDecodeError:
-            raise ValueError(f"{response.status_code}: Invalid response JSON:\n{response.text()}")
+            raise ValueError(f"{response.status_code}: Invalid response JSON:\n{response.text}")
     else:
-        raise ValueError(f"Request failed with status code {response.status_code}")
+        raise ValueError(f"Request failed with status code {response.status_code}:{response.text}")
 
 def parse_arguments():
     """ Parse command line arguments """
     parser = argparse.ArgumentParser(description="Sends the report JSON data to the endpoint")
-    parser.add_argument('--json', required=True, help='Path to the JSON file')
-    parser.add_argument('--url', required=True, help='URL of the REST endpoint')
+    parser.add_argument('json', help='Path to the JSON file')
+    parser.add_argument('url', help='URL of the REST endpoint')
     return parser.parse_args()
 
 
