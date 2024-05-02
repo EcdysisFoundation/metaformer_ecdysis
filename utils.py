@@ -2,6 +2,7 @@ import os
 import torch
 import importlib
 import torch.distributed as dist
+import json
 
 try:
     # noinspection PyUnresolvedReferences
@@ -38,9 +39,7 @@ def relative_bias_interpolate(checkpoint,config):
     return checkpoint
     
     
-def load_pretained(config,model,logger=None,strict=False):
-    if logger is not None:
-        logger.info(f"==============> pretrain form {config.MODEL.PRETRAINED}....................")
+def load_pretained(config, model, logger=None, strict=False):
     checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu')
     if 'model' not in checkpoint:
         if 'state_dict_ema' in checkpoint:
@@ -48,19 +47,17 @@ def load_pretained(config,model,logger=None,strict=False):
         else:
             checkpoint['model'] = checkpoint
     if config.MODEL.DORP_HEAD:
+        if logger is not None:
+            logger.info(f"Dropping head...")
         if 'head.weight' in checkpoint['model'] and 'head.bias' in checkpoint['model']:
-            if logger is not None:
-                logger.info(f"==============> drop head....................")
             del checkpoint['model']['head.weight']
             del checkpoint['model']['head.bias']
         if 'head.fc.weight' in checkpoint['model'] and 'head.fc.bias' in checkpoint['model']:
-            if logger is not None:
-                logger.info(f"==============> drop head....................")
             del checkpoint['model']['head.fc.weight']
             del checkpoint['model']['head.fc.bias']
     if config.MODEL.DORP_META:
         if logger is not None:
-            logger.info(f"==============> drop meta head....................")
+            logger.info(f"Dropping meta...")
         for k in list(checkpoint['model']):
             if 'meta' in k:
                 del checkpoint['model'][k]
@@ -76,7 +73,7 @@ def load_pretained(config,model,logger=None,strict=False):
 
 
 def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
-    logger.info(f"==============> Resuming form {config.MODEL.RESUME}....................")
+    logger.info(f"Resuming form {config.MODEL.RESUME}")
     if config.MODEL.RESUME.startswith('https'):
         checkpoint = torch.hub.load_state_dict_from_url(
             config.MODEL.RESUME, map_location='cpu', check_hash=True)
@@ -107,7 +104,7 @@ def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
     return max_accuracy
 
 
-def save_checkpoint(config, epoch, model, max_accuracy, optimizer, lr_scheduler, logger, best=False):
+def save_checkpoint(config, epoch, model, max_accuracy, optimizer, lr_scheduler, name):
     """
     Save checkpoint of model state
     Args:
@@ -117,8 +114,7 @@ def save_checkpoint(config, epoch, model, max_accuracy, optimizer, lr_scheduler,
         max_accuracy: Maximum accuracy
         optimizer: Optimizer state
         lr_scheduler: Learning rate scheduler state
-        logger: Logger object
-        best: If `True` save checkpoint as `best.pth`
+        name: Name of checkpoint
 
     """
     save_state = {'model': model.state_dict(),
@@ -130,20 +126,8 @@ def save_checkpoint(config, epoch, model, max_accuracy, optimizer, lr_scheduler,
     if config.AMP_OPT_LEVEL != "O0":
         save_state['amp'] = amp.state_dict()
 
-    if best:
-        best_save_path = os.path.join(config.OUTPUT, 'best.pth')
-        torch.save(save_state, best_save_path)
-        logger.info(f"{best_save_path} saved !!!")
-        return
-
-    save_path = os.path.join(config.OUTPUT, f'ckpt_epoch_{epoch}.pth')
+    save_path = os.path.join(config.OUTPUT, f'{name}.pth')
     torch.save(save_state, save_path)
-    logger.info(f"{save_path} saved !!!")
-
-    lastest_save_path = os.path.join(config.OUTPUT, f'latest.pth')
-    torch.save(save_state, lastest_save_path)
-    logger.info(f"{lastest_save_path} saved !!!")
-
 
 
 def get_grad_norm(parameters, norm_type=2):
@@ -179,11 +163,14 @@ def reduce_tensor(tensor):
     return rt
 
 
-
-
 def load_ext(name, funcs):
     ext = importlib.import_module(name)
     for fun in funcs:
         assert hasattr(ext, fun), f'{fun} miss in module {name}'
     return ext
 
+
+def save_json(data:dict,path,sort_keys=False):
+    """ Save Dict to disk as JSON with pretty print """
+    with open(path,'w') as f:
+        json.dump(data,f,indent=2,sort_keys=sort_keys)

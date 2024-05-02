@@ -1,5 +1,4 @@
 import base64
-import csv
 import io
 import logging
 from pathlib import Path
@@ -82,7 +81,8 @@ class MetaformerHandler(VisionHandler):
 
         [{ "taxonid": 5108951,
           "confidence": "99.92",
-          "labels": "Diphthera festiva",
+          "morphospecie_id": 3458,
+          "name": "Diphthera festiva",
           "optional_preds": [
             {
               "pred_op": "0.07",
@@ -109,23 +109,26 @@ class MetaformerHandler(VisionHandler):
             primary_confidence, primary_class_index = confidences[0], indices[0]
 
             if primary_confidence >= minimum_confidence:
-                labels = class_names[primary_class_index]  # Map index to name i.e. 0 -> 'Diphthera festiva'
-                taxonid = self.mapping.get(labels, 0)  # Map name to GBIF taxon id i.e. 'Diphthera festiva' -> 5108951
+                labels = class_names[primary_class_index]  # Map index to id
+                morphospecies, taxonid = self.mapping.get(labels, 0)  # Map id to GBIF taxon id and morphospecies name
             else:
+                labels = 3458
+                morphospecies = 'incertae sedis'
                 taxonid = 0
-                labels = 'Unclassified'
 
             response = {'taxonid': int(taxonid),
                         'confidence': round(primary_confidence*100, 2),  # Convert to percentage
-                        'morphospecie': labels,
+                        'morphospecie_id': int(labels),
+                        'name': morphospecies,
                         'optional_preds': []}
 
             # Add optional predictions if there is a confident primary prediction
             if primary_confidence >= minimum_confidence:
                 for optional_confidence, optional_class_index in zip(confidences[1:], indices[1:]):
+                    optional_name, optional_id = self.mapping.get(class_names[optional_class_index], 0)
                     response['optional_preds'].append({
                         'pred_op': round(optional_confidence*100, 2),
-                        'class_op': class_names[optional_class_index]
+                        'class_op': optional_name
                     })
 
             output.append(response)

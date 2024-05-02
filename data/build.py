@@ -5,7 +5,6 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
-import os
 from pathlib import Path
 
 import torch
@@ -15,12 +14,11 @@ from torchvision import datasets, transforms
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import Mixup
 from timm.data import create_transform
-from timm.data.transforms import _pil_interp
 from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
 from .cached_image_folder import CachedImageFolder
-from .samplers import SubsetRandomSampler
+from .samplers import SubsetRandomSampler, DistributedWeightedSampler
 from .dataset_fg import DatasetMeta
 
 
@@ -30,52 +28,72 @@ def build_loader(config):
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=__name__,
                            local_rank=config.LOCAL_RANK)
 
-    dataset_train, config.MODEL.NUM_CLASSES = build_dataset(is_train=True, config=config, logger=logger)
-    config.freeze()
-    logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset")
-    dataset_val, _ = build_dataset(is_train=False, config=config, logger=logger)
-    logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build val dataset")
+    if config.EVAL_MODE:
+        dataset_test, _ = build_dataset(is_train=False, config=config, logger=logger)
+        data_loader_test = torch.utils.data.DataLoader(dataset_test,
+                                                       batch_size=config.DATA.BATCH_SIZE,
+                                                       shuffle=False,
+                                                       num_workers=config.DATA.NUM_WORKERS,
+                                                       pin_memory=config.DATA.PIN_MEMORY,
+                                                       drop_last=False)
+        config.DATA.TEST_SAMPLES = len(dataset_test)
+        config.freeze()
+        return dataset_test, data_loader_test
 
-    num_tasks = dist.get_world_size()
-    global_rank = dist.get_rank()
-    if config.DATA.ZIP_MODE and config.DATA.CACHE_MODE == 'part':
-        indices = np.arange(dist.get_rank(), len(dataset_train), dist.get_world_size())
-        sampler_train = SubsetRandomSampler(indices)
     else:
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        dataset_train, config.MODEL.NUM_CLASSES = build_dataset(is_train=True, config=config, logger=logger)
+        config.DATA.TRAIN_SAMPLES = len(dataset_train)
+        config.freeze()
+        logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset")
+
+        dataset_val, _ = build_dataset(is_train=False, config=config, logger=logger)
+        logger.info(f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build val dataset")
+
+        num_tasks = dist.get_world_size()
+        global_rank = dist.get_rank()
+        if config.DATA.ZIP_MODE and config.DATA.CACHE_MODE == 'part':
+            indices = np.arange(dist.get_rank(), len(dataset_train), dist.get_world_size())
+            sampler_train = SubsetRandomSampler(indices)
+        else:
+            if config.TRAIN.SAMPLER == 'weighted':
+                sampler_train = DistributedWeightedSampler(
+                    dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+                )
+            else:
+                sampler_train = torch.utils.data.DistributedSampler(
+                    dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+                )
+
+        indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
+        sampler_val = SubsetRandomSampler(indices)
+
+        data_loader_train = torch.utils.data.DataLoader(
+            dataset_train, sampler=sampler_train,
+            batch_size=config.DATA.BATCH_SIZE,
+            num_workers=config.DATA.NUM_WORKERS,
+            pin_memory=config.DATA.PIN_MEMORY,
+            drop_last=True,
         )
 
-    indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
-    sampler_val = SubsetRandomSampler(indices)
+        data_loader_val = torch.utils.data.DataLoader(
+            dataset_val, sampler=sampler_val,
+            batch_size=config.DATA.BATCH_SIZE,
+            shuffle=False,
+            num_workers=config.DATA.NUM_WORKERS,
+            pin_memory=config.DATA.PIN_MEMORY,
+            drop_last=False
+        )
 
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
-        batch_size=config.DATA.BATCH_SIZE,
-        num_workers=config.DATA.NUM_WORKERS,
-        pin_memory=config.DATA.PIN_MEMORY,
-        drop_last=True,
-    )
+        # setup mixup / cutmix
+        mixup_fn = None
+        mixup_active = config.AUG.MIXUP > 0 or config.AUG.CUTMIX > 0. or config.AUG.CUTMIX_MINMAX is not None
+        if mixup_active:
+            mixup_fn = Mixup(
+                mixup_alpha=config.AUG.MIXUP, cutmix_alpha=config.AUG.CUTMIX, cutmix_minmax=config.AUG.CUTMIX_MINMAX,
+                prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
+                label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
 
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val, sampler=sampler_val,
-        batch_size=config.DATA.BATCH_SIZE,
-        shuffle=False,
-        num_workers=config.DATA.NUM_WORKERS,
-        pin_memory=config.DATA.PIN_MEMORY,
-        drop_last=False
-    )
-
-    # setup mixup / cutmix
-    mixup_fn = None
-    mixup_active = config.AUG.MIXUP > 0 or config.AUG.CUTMIX > 0. or config.AUG.CUTMIX_MINMAX is not None
-    if mixup_active:
-        mixup_fn = Mixup(
-            mixup_alpha=config.AUG.MIXUP, cutmix_alpha=config.AUG.CUTMIX, cutmix_minmax=config.AUG.CUTMIX_MINMAX,
-            prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
-            label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
-
-    return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
+        return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
 
 
 def build_dataset(is_train, config, logger):
@@ -132,7 +150,7 @@ def build_dataset(is_train, config, logger):
         root = './datasets/aircraft'
         dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
         nb_classes = 100
-    elif config.DATA.DATASET.startswith('insect'):
+    elif config.DATA.DATASET.startswith('bugbox'):
         dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
         if is_train:
             config.DATA.CLASS_NAMES = dataset.classes
@@ -192,7 +210,7 @@ def build_transform(is_train, config):
             re_prob=config.AUG.REPROB,
             re_mode=config.AUG.REMODE,
             re_count=config.AUG.RECOUNT,
-            interpolation=config.DATA.TRAIN_INTERPOLATION,
+            interpolation='bilinear',
         )
         if not resize_im:
             # replace RandomResizedCropAndInterpolation with

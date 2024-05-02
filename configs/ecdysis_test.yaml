@@ -1,0 +1,25 @@
+# Default training configuration file for MetaFG_2 in ecdysis02 server
+# Uses 2 Nvidia RTX 3080 GPUs
+
+DATA:
+  DATASET: 'bugbox'
+  IMG_SIZE: 384
+  BATCH_SIZE: 4  # Has to have checkpoint activated
+  NUM_WORKERS: 8
+  NUM_READERS: 8
+MODEL:
+  TYPE: MetaFG
+  NAME: ecdysis
+PRINT_FREQ: 10
+SAVE_FREQ: 1000  # only save_csv best and last checkpoints
+USE_AMP: True
+TRAIN:
+  USE_CHECKPOINT: True  # Mandatory for handling batches of 4 images
+  EPOCHS: 1 # This takes about 20 minutes
+  BASE_LR: 16e-4
+  MIN_LR: 16e-6
+  WARMUP_EPOCHS: 1
+  SAMPLER: 'weighted'
+  EARLY_STOP:
+    MIN_EPOCHS: 80
+    PATIENCE: 15

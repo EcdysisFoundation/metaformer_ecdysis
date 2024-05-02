@@ -1,10 +1,26 @@
+> *Note: All commands assume the working directory is the root of this repository*
+
+## Environment
+
+All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate
+metaformer` inside the shell. `conda run -n metaformer <command>` can be used to run a command inside the environment 
+without changing the base environment.
 
 
-## Data scripts
+## Dataset generation
 
-All scripts use symlinks by default to avoid unnecessary disk usage and improve execution speed.
+To generate a dataset ready for model training execute `python -m dataset_generation`. Use the option `-h` to see all
+options available. The parameters to set the connection to the remote server should be inside `connection.py` in the
+`dataset_generation` directory.
 
-### `generate_data_from_csv`
+### Scripts and modules
+#### `db.py`
+Contains a custom class to interact with BugBox's database.
+
+#### `queries.py`
+Contains useful sql queries to extract data from BugBox's database.
+
+#### `generate_tree.py`
 
 Generates directory structure for classified insect pictures, where every taxon level is represented by a subdirectory. 
 For example:
@@ -29,7 +45,7 @@ root/
   output_path           Output directory path
 ```
 
-### `split_insect_samples`
+#### `split.py`
 
 Generates train/test/val splits from a directory of classified insect pictures. The output directory structure follows
 Imagenet format. Example:
@@ -62,6 +78,39 @@ split_insect_samples.py [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-
   output_directory      Output directory
 ```
 
+
+## Training and evaluation
+
+### Main MetaFormer script
+
+To run a training using both GPUs available on a generated dataset execute
+```commandline
+python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/MetaFG_2_384.yaml
+ --dataset bugbox --data-path datasets/bugbox_morphospecie --tag tag --version version
+ --pretrain pretrained/metafg_2_inat21_384.pth --ignore-user-warnings --use-checkpoint
+```
+The parameters and options for the training procedure are defined in the configuration file (configs/MetaFG_2_384.yaml 
+in the example). Arguments passed in the command line will overwrite those in the file. 
+
+To evaluate the model on the test set use
+```commandline
+python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg output/ecdysis/model-name/config.yaml
+ --dataset bugbox --data-path datasets/bugbox_morphospecie --tag tag --version version
+ --pretrain output/ecdysis/model-name/best.pth --ignore-user-warnings --use-checkpoint --eval
+```
+Make sure to use the correct config and pretrained weights. Classification statistics are saved in csv format inside the
+output/ecdysis/model-name/ directory.
+
+### Tensorboard
+
+Training and validation metrics are saved to tensorboard by default. To run the Tensorboard server on a particular model 
+execute
+```commandline
+tensorboard --logdir output/ecdysis/model-name/tensorboard --bind_all
+```
+then open a browser and go to [](host-or-ip:6006)
+
+
 ## Deployment scripts
 
 ### Test model deployment `deploy/test.sh`
@@ -70,8 +119,8 @@ This script automatically lunches a local *Torchserve* instance, publishes the s
 the prediction endpoint.
 
 *usage*:
-```
-    bash deploy/test.sh model_name image_path
+```commandline
+    bash deploy/test.sh "model_name" "image/path"
 ```
 *positional arguments*:
 ```
@@ -79,15 +128,65 @@ the prediction endpoint.
     image_path        Path to the image to be send for testing
 ```
 
-### Publish model script `deploy/publish_model.sh`
+### Serve script `deploy/serve.sh`
 
-Publishes model on ecdysis01, *Torchserve* container must be up and running. Deletes previous model if present.
+Serves model to a running *Torchserve* container with its management API published at port 8085. The archive is forcibly
+recreated, so it will overwrite an old archive if the new shares the same name.
 
 *usage*:
-```
-    bash deploy/publish_model.sh model_name
+```commandline
+    bash deploy/serve.sh "model_name" "host_address" "model_version"
 ```
 *positional arguments*:
 ```
-    model_name        Metaformer model name (directory inside output/MetaFG_2 directory)
+    model_name        Metaformer model name (directory inside output/ecdysis directory)
+    host_address      Host name or IP address (i.e. ecdysis01.local, localhost, 127.0.0.1)
+    model_version     Version identifier of the model (i.e. 1.0)
+```
+
+### Automatic training script `deploy/automatic_training.sh`
+
+Used as a cronjob to perform regular trainings. It automatically generates a dataset with all images available on
+BugBox, executes training and evaluation and deploys the model with the next available minor version.
+
+*usage*
+```commandline
+    bash deploy/automatic_training.sh "host-address" "model_name"
+```
+
+*positional_arguments*:
+```
+    host_address      Host name or IP address (i.e. ecdysis01.local, localhost, 127.0.0.1)
+    model_name        Metaformer model name (directory inside output/ecdysis directory)
+```
+
+For manually lunched trainings you can also use the command:
+```commandline
+run-metaformer-training
+```
+This is an alias for `conda run --live-stream -n metaformer-amp /home/ecdysis/MetaFormer/deploy/automatic_training.sh 
+ecdysis01.local morphospecies`.
+
+> *Note:* Using `nohup` will not prevent the training process to be killed when the shell session is terminated. This is
+> due to an issue with signaling and Pytorch's distributed training (see https://github.com/pytorch/pytorch/issues/67538).
+> To run the training script in the background and close the terminal you must use `tmux` instead.
+
+### Torchserve inference and management
+
+The model are deployed using [Torchserve](https://pytorch.org/serve/). The management API is published at port 8085 and 
+the inference API at port 8084.
+
+To check which models are currently deployed use
+```commandline
+curl host:8085/models
+```
+
+To get information about a specific model use
+```commandline
+curl host:8085/models/model_name
+```
+
+To request a classification of a local image use
+```commandline
+curl -X POST host:8084/predictions/model_name -T path/to/image.jpg
 ```

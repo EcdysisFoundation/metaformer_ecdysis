@@ -71,7 +71,7 @@ datasets
   |       └——————...
 ```
 #### Training
-You can dowmload pre-trained model from model zoo, and put them under \<root\>/pretrained.
+You can download pre-trained models from the model zoo, and put them under \<root\>/pretrained.
 To train MetaFG on datasets, run:
 ```
 python3 -m torch.distributed.launch --nproc_per_node <num-of-gpus-to-use> --master_port 12345  main.py --cfg <config-file> --dataset <dataset-name> --pretrain <pretainedmodel-path> [--batch-size <batch-size-per-gpu> --output <output-directory> --tag <job-tag>]

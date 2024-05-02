@@ -13,19 +13,17 @@ import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-import torchmetrics
-from matplotlib import pyplot as plt
-from sklearn.metrics import ConfusionMatrixDisplay
 
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import accuracy, AverageMeter
 from torch.utils.data import DataLoader
-from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix, StatScores
 from tqdm import tqdm
 
+from callbacks import EarlyStopper
 from config import get_config
 from data.build import build_dataset
-from build import build_model
+from metrics import get_json_stats, get_model_metrics, get_stats, log_metrics, plot_confusion_matrix, dump_summary
+from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
 from optimizer import build_optimizer
@@ -60,9 +58,10 @@ def parse_option():
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
     parser.add_argument('--use-checkpoint', action='store_true',
-                        help="whether to use gradient checkpointing to save memory")
+                        help="whether to use gradient checkpointing to save_csv memory")
     parser.add_argument('--amp-opt-level', type=str, default='O0', choices=['O0', 'O1', 'O2'],
                         help='mixed precision opt level, if O0, no amp is used')  # Disabled by default due to apex library installation issues
+    parser.add_argument('--amp', action='store_true', help='Use Pytorch\'s native Automatic Mixed Precision')
     parser.add_argument('--output', default='output', type=str, metavar='PATH',
                         help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
     parser.add_argument('--tag', help='tag of experiment')
@@ -85,6 +84,8 @@ def parse_option():
                         help="epochs")
     parser.add_argument('--warmup-epochs', type=int,
                         help="epochs")
+
+    parser.add_argument('--sampler', type=str, default=None, choices=('weighted',), help='Type of training sampler')
     
     parser.add_argument('--dataset', type=str,
                         help='dataset')
@@ -94,7 +95,7 @@ def parse_option():
     parser.add_argument('--pretrain', type=str,
                         help='pretrain')
     
-    parser.add_argument('--tensorboard', action='store_true', help='using tensorboard')
+    parser.add_argument('--version', type=str, help='Version to tag trained model')
 
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
                         help='Disable logging of UserWarnings')
@@ -110,51 +111,38 @@ def parse_option():
 
 
 def main(config):
-    dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
-    logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
-    model = build_model(config)
-
-    metrics = [
-        Accuracy(num_classes=config.MODEL.NUM_CLASSES, average='micro'),
-        Precision(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-        Recall(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-        F1Score(num_classes=config.MODEL.NUM_CLASSES, average='macro')
-    ]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(num_classes=config.MODEL.NUM_CLASSES, reduce='macro'))
-        metrics.append(ConfusionMatrix(num_classes=config.MODEL.NUM_CLASSES))
+        logger.info(f"Running in eval mode")
+        if config.MODEL.PRETRAINED:
+            logger.info(f"Loading pretrained model from {config.MODEL.PRETRAINED}")
+        else:
+            raise ValueError("Pretrained model path needs to be specified when running in eval mode")
+        dataset_test, data_loader_test = build_loader(config)
+    else:
+        # The data needs to be loaded before the model is created to fill the num_classes field
+        dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
-    metrics = torchmetrics.MetricCollection(metrics)
-    model.metric = metrics  # This need to be here to avoid problems with distributed training
+    logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
+    model = build_model(config)
+
+    metrics = get_model_metrics(config)
+    model.metrics = metrics  # This need to be here to avoid problems with distributed training
 
     model.cuda()
-    logger.debug(str(model))
+
+    scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
 
     optimizer = build_optimizer(config, model)
-    if config.AMP_OPT_LEVEL != "O0":
-        model, optimizer = amp.initialize(model, optimizer, opt_level=config.AMP_OPT_LEVEL)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
     model_without_ddp = model.module
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of trainable parameters: {n_parameters}")
 
-    if config.MODEL.PRETRAINED:
+    if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
-        if config.EVAL_MODE:
-            # Create test set loader
-            dataset_test, _ = build_dataset(is_train=False, config=config, logger=logger)
-            data_loader_test = DataLoader(
-                dataset_test,
-                batch_size=config.DATA.BATCH_SIZE,
-                shuffle=False,
-                num_workers=config.DATA.NUM_WORKERS,
-                pin_memory=config.DATA.PIN_MEMORY,
-                drop_last=False
-            )
-            # Eval and return
-            _ = validate(config, data_loader_test, model, 0, metrics)
-            return
+        validate(config, data_loader_test, model, 0, metrics)
+        return
 
     if hasattr(model_without_ddp, 'flops'):
         flops = model_without_ddp.flops()
@@ -197,43 +185,46 @@ def main(config):
         throughput(data_loader_val, model, logger)
         return
 
-    # min_loss = float('inf')  # Used to save the best model
-
     # TB logger
-    tb_dir = Path(config.OUTPUT) / 'tb'
+    tb_dir = Path(config.OUTPUT) / 'tensorboard'
     tb_dir.mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=tb_dir)
 
+    # Early stopping
+    stopper = EarlyStopper(patience=config.TRAIN.EARLY_STOP.PATIENCE, min_delta=config.TRAIN.EARLY_STOP.MIN_DELTA)
+
     start_time = time.time()
-    with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.EPOCHS, unit='epoch') as pbar:
-        for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
+    with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1,
+              unit='epoch', initial=config.TRAIN.START_EPOCH) as pbar:
+        for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
             # Train
             data_loader_train.sampler.set_epoch(epoch)
             train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
-                                       lr_scheduler, writer)
-            if dist.get_rank() == 0 and (epoch % config.SAVE_FREQ == 0):
-                save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger)
+                                       lr_scheduler, scaler, writer)
 
             # Validate
-            acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
-            # logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
+            if config.DATA.ADD_META:
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
+            else:
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
 
             if acc1 > max_accuracy:
                 max_accuracy = acc1
                 pbar.set_postfix_str(f'Maximum accuracy on validation so far: {max_accuracy:.3f}%')
+                # Save best checkpoint
                 if dist.get_rank() == 0:
-                    save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, logger,
-                                    best=True)
+                    save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, 'best')
 
-            # if loss < min_loss:
-            #     # Best validation loss so far
-            #     min_loss = loss
-            #     logger.info(f'Minimum validation loss: {min_loss:.3f}')
+            if dist.get_rank() == 0:
+                # Save periodic checkpoint
+                if epoch % config.SAVE_FREQ == 0:
+                    save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'epoch_{epoch}')
+                # Save latest checkpoint
+                save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
 
-            if config.DATA.ADD_META:
-                logger.info(f"**********mask meta test***********")
-                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
-                logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
+            if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
+                logger.info(f"Early stopping at epoch {epoch}")
+                break
 
             pbar.update()
 
@@ -242,7 +233,7 @@ def main(config):
     logger.info('Training time {}'.format(total_time_str))
 
 
-def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler,tb_logger=None):
+def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, scaler, tb_logger=None):
     """
     Train for one epoch
     Args:
@@ -263,18 +254,15 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
     optimizer.zero_grad()
 
     num_steps = len(data_loader)
-    batch_time = AverageMeter()
     loss_meter = AverageMeter()
     norm_meter = AverageMeter()
 
-    start = time.time()
-    end = time.time()
-
-    with tqdm(desc=f'Training | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]',
-              total=len(data_loader), unit='batch') as pbar:
+    pbar_description = f'Training | Rank {dist.get_rank()} | ' \
+                       f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
+    with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
         for idx, data in enumerate(data_loader):
             if config.DATA.ADD_META:
-                samples, targets,meta = data
+                samples, targets, meta = data
                 meta = [m.float() for m in meta]
                 meta = torch.stack(meta,dim=0)
                 meta = meta.cuda(non_blocking=True)
@@ -287,48 +275,42 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
-            if config.DATA.ADD_META:
-                outputs = model(samples,meta)
-            else:
-                outputs = model(samples)
+
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=config.USE_AMP):
+                if config.DATA.ADD_META:
+                    outputs = model(samples, meta)
+                else:
+                    outputs = model(samples)
+
+                loss = criterion(outputs, targets)
 
             if config.TRAIN.ACCUMULATION_STEPS > 1:
-                loss = criterion(outputs, targets)
                 loss = loss / config.TRAIN.ACCUMULATION_STEPS
-                if config.AMP_OPT_LEVEL != "O0":
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                    if config.TRAIN.CLIP_GRAD:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
-                    else:
-                        grad_norm = get_grad_norm(amp.master_params(optimizer))
+                scaler.scale(loss).backward()
+
+                scaler.unscale_(optimizer)
+                if config.TRAIN.CLIP_GRAD:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
                 else:
-                    loss.backward()
-                    if config.TRAIN.CLIP_GRAD:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
-                    else:
-                        grad_norm = get_grad_norm(model.parameters())
+                    grad_norm = get_grad_norm(model.parameters())
+
                 if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
-                    optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
                     optimizer.zero_grad()
                     lr_scheduler.step_update(epoch * num_steps + idx)
             else:
-                loss = criterion(outputs, targets)
-                optimizer.zero_grad()
-                if config.AMP_OPT_LEVEL != "O0":
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                    if config.TRAIN.CLIP_GRAD:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.TRAIN.CLIP_GRAD)
-                    else:
-                        grad_norm = get_grad_norm(amp.master_params(optimizer))
+                scaler.scale(loss).backward()
+
+                scaler.unscale_(optimizer)
+                if config.TRAIN.CLIP_GRAD:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
                 else:
-                    loss.backward()
-                    if config.TRAIN.CLIP_GRAD:
-                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
-                    else:
-                        grad_norm = get_grad_norm(model.parameters())
-                optimizer.step()
+                    grad_norm = get_grad_norm(model.parameters())
+
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
                 lr_scheduler.step_update(epoch * num_steps + idx)
 
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
@@ -340,18 +322,13 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
         loss_meter.update(loss.item(), targets.size(0))
         norm_meter.update(grad_norm)
-        batch_time.update(time.time() - end)
-        end = time.time()
 
-        if tb_logger is not None:
-            step = epoch * num_steps + idx
-            tb_logger.add_scalar('train/loss', loss_meter.avg, global_step=step)
-            tb_logger.add_scalar('train/grad_norm', norm_meter.avg, global_step=step)
-            lr = optimizer.param_groups[0]['lr']
-            tb_logger.add_scalar('train/lr', lr, global_step=step)
-
-    epoch_time = time.time() - start
-
+    if tb_logger is not None:
+        step = epoch
+        tb_logger.add_scalar('train/loss', loss_meter.avg, global_step=step)
+        tb_logger.add_scalar('train/grad_norm', norm_meter.avg, global_step=step)
+        lr = optimizer.param_groups[0]['lr']
+        tb_logger.add_scalar('train/lr', lr, global_step=step)
 
 @torch.no_grad()
 def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
@@ -378,8 +355,12 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
     end = time.time()
 
-    with tqdm(desc=f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]',
-              total=len(data_loader), unit='batch') as pbar:
+    if config.EVAL_MODE:
+        pbar_desc = f'Testing | Rank {dist.get_rank()}'
+    else:
+        pbar_desc = f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]'
+
+    with tqdm(desc=pbar_desc, total=len(data_loader), unit='batch') as pbar:
         for idx, data in enumerate(data_loader):
             if config.DATA.ADD_META:
                 images,target,meta = data
@@ -395,25 +376,25 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             images = images.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
 
-            # compute output
-            if config.DATA.ADD_META:
-                output = model(images, meta)
-            else:
-                output = model(images)
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                if config.DATA.ADD_META:
+                    output = model(images, meta)
+                else:
+                    output = model(images)
 
-            # measure accuracy and record loss
-            loss = criterion(output, target)
-            acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
+                # measure accuracy and record loss
+                loss = criterion(output, target)
+                acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
-            metric.update(output, target)
+                metric.update(output, target)
 
-            acc1 = reduce_tensor(acc1)
-            acc5 = reduce_tensor(acc5)
-            loss = reduce_tensor(loss)
+                acc1 = reduce_tensor(acc1)
+                acc5 = reduce_tensor(acc5)
+                loss = reduce_tensor(loss)
 
-            loss_meter.update(loss.item(), target.size(0))
-            acc1_meter.update(acc1.item(), target.size(0))
-            acc5_meter.update(acc5.item(), target.size(0))
+                loss_meter.update(loss.item(), target.size(0))
+                acc1_meter.update(acc1.item(), target.size(0))
+                acc5_meter.update(acc5.item(), target.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -424,90 +405,44 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             pbar.update()
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
-    epoch_metric = metric.compute()  # TODO fix issue where each sample is evaluated twice due to distribution in 2 gpus (only in eval mode)
+    epoch_metric = metric.compute()
 
     if tb_logger is not None:
         step = epoch
         tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
-    if config.EVAL_MODE:
-        class_names = data_loader.dataset.classes
-        stats = get_stats(metric, class_names, config.OUTPUT, save=True)
+    if config.EVAL_MODE and dist.get_rank() == 0:
+        # taxon map contents are for example:
+        # id,name,taxon_id 
+        # 3480,Gracillariidae 007,9103399
+        # where id is morphospecie id
+        id_column = 'morphospecie_id'
+        display = 3 # how many entries to display for debug purposes
+        classes_df =  pd.read_csv('deploy/taxon_map.csv', index_col='id')
+        logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
+        logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
+        # get class ids and names in the same order as in the dataset
+        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()["id"]
+        class_names = classes_df.loc[map(int, config.DATA.CLASS_NAMES), 'name']
+        logger.info(f"First class_names :\n{list(class_names[:display])}")
+        # get CSV stats using the names
+        stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
+        # We saved the split info on a CSV
+        split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
+        split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
+        logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
+        logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
+        json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
+        get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
-        plot_confusion_matrix(metric, class_names, config.OUTPUT, save=True)
+        plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
+        dump_summary(epoch_metric, config, dump=True)
 
     metric.reset()  # Do not accumulate over epochs
 
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
-
-
-def get_stats(metrics, class_names, output_dir, save=True):
-    """
-    Get and save per class statistics
-    Args:
-        metrics: torchmetrics collection, has to have a `StatScores` metric
-        class_names: List of class names
-        output_dir: Output directory path
-        save: Whether to save as a csv file
-
-    Returns: Statistics data frame
-    """
-    stats = metrics['StatScores']
-    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
-
-    stats_data = {'TP': tp,
-                  'FP': fp,
-                  'TN': tn,
-                  'FN': fn,
-                  'Precision': tp / (tp + fp),
-                  'Recall': tp / (tp + fn),
-                  'F1': 2*tp / (2*tp + fp + fn),
-                  'Total samples': tp + fn}
-    stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)
-
-    if save:
-        csv = Path(output_dir)/'eval_stats.csv'
-        stats.to_csv(csv)
-
-    return stats
-
-
-def plot_confusion_matrix(metrics, class_names, output_dir, save=True):
-    """
-    Render and save confusion matrix
-    Args:
-        metrics: torchmetrics collection, has to have a `ConfusionMatrix` metric
-        output_dir: Output directory path
-        save: save: Whether to save as a csv file
-    """
-    matrix = metrics['ConfusionMatrix'].confmat.cpu().numpy()
-    matrix_display = ConfusionMatrixDisplay(matrix, display_labels=class_names)
-
-    fig, ax = plt.subplots(figsize=(40, 40))
-    matrix_display.plot(xticks_rotation='vertical', colorbar=False, ax=ax)
-
-    if save:
-        confusion_matrix = Path(output_dir) / 'confusion_matrix.png'
-        plt.savefig(confusion_matrix)
-
-    plt.show()
-
-
-def log_metrics(logger: logging.Logger, metrics: torchmetrics.Metric, aggregation: str):
-    """
-    Simple function to log classification metrics at batch or epoch level
-    Args:
-        logger:
-        metrics:
-        aggregation:
-
-    Returns:
-
-    """
-    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['StatScores', 'ConfusionMatrix'])
-    logger.info(f'{aggregation.title()} metrics:\n\t{metrics_string}')
 
 
 @torch.no_grad()
@@ -530,15 +465,7 @@ def throughput(data_loader, model, logger):
         return
 
 
-if __name__ == '__main__':
-    args, config = parse_option()
-
-    if args.ignore_user_warnings:
-        warnings.filterwarnings('ignore', category=UserWarning)
-
-    if config.AMP_OPT_LEVEL != "O0":
-        assert amp is not None, "amp not installed!"
-
+def setup_distributed(config):
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         rank = int(os.environ["RANK"])
         world_size = int(os.environ['WORLD_SIZE'])
@@ -549,11 +476,23 @@ if __name__ == '__main__':
     torch.cuda.set_device(config.LOCAL_RANK)
     torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=world_size, rank=rank)
     torch.distributed.barrier()
-
     seed = config.SEED + dist.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
     cudnn.benchmark = True
+
+
+if __name__ == '__main__':
+    args, config = parse_option()
+    logging.basicConfig(level=logging.INFO)
+
+    if args.ignore_user_warnings:
+        warnings.filterwarnings('ignore', category=UserWarning)
+
+    if config.AMP_OPT_LEVEL != "O0":
+        assert amp is not None, "amp not installed!"
+
+    setup_distributed(config)
 
     # linear scale the learning rate according to total batch size, may not be optimal
     linear_scaled_lr = config.TRAIN.BASE_LR * config.DATA.BATCH_SIZE * dist.get_world_size() / 512.0
@@ -574,13 +513,10 @@ if __name__ == '__main__':
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
                            local_rank=config.LOCAL_RANK)
 
-    if dist.get_rank() == 0:
-        path = os.path.join(config.OUTPUT, "config.json")
+    main(config)
+
+    if dist.get_rank() == 0 and not config.EVAL_MODE:
+        path = os.path.join(config.OUTPUT, "config.yaml")
         with open(path, "w") as f:
             f.write(config.dump())
         logger.info(f"Full config saved to {path}")
-
-    # print config
-    logger.info(config.dump())
-
-    main(config)
