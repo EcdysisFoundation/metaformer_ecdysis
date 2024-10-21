@@ -4,10 +4,10 @@ from string import Template
 
 images = Template(
     """SELECT LTRIM(image, '/') AS image, uuid, classification_id, morphospecie_id
-    FROM (cms_app_specimen AS s 
-        JOIN cms_app_image AS i 
-        ON s.id = i.specimen_id) 
-    WHERE (s.acceptance = 1 OR s.acceptance = 2)  AND s.classification_id > 0 AND s.sample_id IS NOT NULL AND i.date_added > NOW() - INTERVAL \'1 $lookback\'"""
+    FROM specimen_info_table AS s 
+    WHERE (s.acceptance = 1 OR s.acceptance = 2)  
+    AND s.classification_id > 0 AND s.sample_id IS NOT NULL 
+    AND i.date_added > NOW() - INTERVAL \'1 $lookback\'"""
 )
 
 images_with_taxon = Template(

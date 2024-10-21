@@ -109,7 +109,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+.conda/
+.vscode/
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -145,4 +146,9 @@ dmypy.json
 /datasets
 
 # Pycharm
-.idea/
+*.idea/
+
+
+*.zip
+csv_output/
+*.csv

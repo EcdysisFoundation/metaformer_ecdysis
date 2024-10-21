@@ -1,22 +1,24 @@
 -- """ Queries for BugBox metadata retrieval """
 
 
-	-- SELECT 
-	-- 	morphos.name AS morphos_name, morphos.id as morphos_id, 
-	-- 	CONCAT(morphos.gbif_order, ' ', morphos.gbif_family, ' ', morphos.gbif_genus ) AS class_name,
-	-- 	morphos.gbif_order as gbif_order, morphos.gbif_family AS gbif_family, morphos.gbif_genus AS gbif_genus,
-	-- 	spec.id AS specimen_id,spec.uuid as uuid, 
-	-- 	image.image, image.id AS image_id,
-	-- 	COUNT(*) AS cnt, 
-	-- 	ROW_NUMBER() OVER (partition by morphos.name ORDER BY COUNT(*) DESC) AS spec_count
-	-- INTO temp spec_info_table
-	-- FROM public.samples_specimenimage as image
-	-- JOIN public.samples_specimen AS spec
-	-- ON image.specimen_id = spec.id
-	-- JOIN public.taxonomy_morphospecies AS morphos 
-	-- ON spec.classification_id = morphos.id
-	-- GROUP BY morphos.name, spec.id, morphos.id, image_id
-	-- ORDER BY spec.id ASC;
+
+
+	SELECT 
+		morphos.name AS morphos_name, morphos.id as morphos_id, 
+		CONCAT(morphos.gbif_order, ' ', morphos.gbif_family, ' ', morphos.gbif_genus ) AS class_name,
+		morphos.gbif_order as gbif_order, morphos.gbif_family AS gbif_family, morphos.gbif_genus AS gbif_genus,
+		spec.id AS specimen_id,spec.uuid as uuid, 
+		image.image, image.id AS image_id,
+		COUNT(*) AS cnt, 
+		ROW_NUMBER() OVER (partition by morphos.name ORDER BY COUNT(*) DESC) AS spec_count
+	INTO temp spec_info_table
+	FROM public.samples_specimenimage as image
+	JOIN public.samples_specimen AS spec
+	ON image.specimen_id = spec.id
+	JOIN public.taxonomy_morphospecies AS morphos 
+	ON spec.classification_id = morphos.id
+	GROUP BY morphos.name, spec.id, morphos.id, image_id
+	ORDER BY spec.id ASC;
 
 
 
@@ -30,20 +32,20 @@
 SELECT img.image, uuid, morphos_id
     FROM spec_info_table AS s 
         JOIN public.samples_specimenimage AS img
-        ON s.id = img.specimen_id) 
+        ON s.id = img.specimen_id
 		JOIN public.taxonomy_morphospecies as morphos
 		ON classification_id = morphos.id
     WHERE (s.acceptance = 2) AND s.classification_id > 0 AND s.sample_id IS NOT NULL;  
 
 
 	
--- SELECT img.image, img.id AS image_id, img.specimen_id, morphos.name AS morphospecies, 
--- spec.classification_id AS taxon_id, morphos.gbif_order, morphos.gbif_family, morphos.gbif_genus
---     FROM public.samples_specimenimage AS img
---         JOIN public.samples_specimen as spec
---         ON img.specimen_id = spec.id 
---         JOIN public.taxonomy_morphospecies as morphos
---         ON spec.classification_id = morphos.id;
+SELECT img.image, img.id AS image_id, img.specimen_id, morphos.name AS morphospecies, 
+spec.classification_id AS taxon_id, morphos.gbif_order, morphos.gbif_family, morphos.gbif_genus
+    FROM public.samples_specimenimage AS img
+        JOIN public.samples_specimen as spec
+        ON img.specimen_id = spec.id 
+        JOIN public.taxonomy_morphospecies as morphos
+        ON spec.classification_id = morphos.id;
 
 -- SELECT morphos.id AS taxon_id, CONCAT("gbif_order", ' ', gbif_family, ' ', gbif_genus ) AS class_name
 --     FROM public.taxonomy_morphospecies AS morphos

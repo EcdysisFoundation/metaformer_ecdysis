@@ -7,10 +7,15 @@ import yaml
 from PIL import Image
 from halo import Halo
 
-from . import LOGGING_LEVEL
+from . import LOGGING_LEVEL, INFO
+
+TAXON_LEVELS = levels = ['order', 'family', 'genus']
+SEED = 42
+LOGGING_LEVEL = INFO
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
+
 
 
 def get_md5_hash(image_path: str):
