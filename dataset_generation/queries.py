@@ -4,26 +4,34 @@ from string import Template
 
 images = Template(
     """SELECT LTRIM(image, '/') AS image, uuid, classification_id, morphospecie_id
-    FROM (cms_app_specimen AS s 
-        JOIN cms_app_image AS i 
-        ON s.id = i.specimen_id) 
-    WHERE s.acceptance = 2 AND s.classification_id > 0 AND s.sample_id IS NOT NULL AND i.date_added > NOW() - INTERVAL \'1 $lookback\'"""
+    FROM specimen_info_table AS s 
+    WHERE (s.acceptance = 1 OR s.acceptance = 2)  
+    AND s.classification_id > 0 AND s.sample_id IS NOT NULL 
+    AND i.date_added > NOW() - INTERVAL \'1 $lookback\'"""
 )
 
 images_with_taxon = Template(
     f"""SELECT images.image, images.uuid AS specimen_id, m.name AS morphospecies, images.classification_id AS taxon_id, m.id AS morphospecie_id, t.order, t.family, t.genus
     FROM ($image_query) AS images 
-        JOIN taxon_app_taxon as t 
+    JOIN taxon_app_taxon as t 
         ON classification_id = \"taxonID\"
-        JOIN taxon_app_morphospecie as m
-        ON images.morphospecie_id = m.id"""
+    JOIN taxon_app_morphospecie as m
+        ON images.morphospecie_id = m.id
+    GROUP BY m.id
+    HAVING COUNT(images.morphospecie_id) >= 1000 
+    ORDER   
+    """
+    
 )
 
 taxa = \
     """SELECT "taxonID" AS taxon_id, CONCAT("order", ' ', family, ' ', genus ) AS class_name
     FROM taxon_app_taxon
-    WHERE "taxonRank" = 'genus' AND genus = "canonicalName" AND "taxonomicStatus" = 'accepted'
-        AND "order" <> '' AND "family" <> ''"""
+    WHERE "taxonRank" = 'genus' 
+        AND genus = "canonicalName" 
+        AND ("taxonomicStatus" = 'accepted' OR "taxonomicStatus" = 'rejected')
+        AND "order" <> '' 
+        AND "family" <> ''"""
 
 reference_images = \
     """SELECT LTRIM(image, '/') AS image, t.order, t.family, t.genus

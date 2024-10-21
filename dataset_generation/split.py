@@ -28,14 +28,19 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from dataset_generation.utils import save_yaml_file
-from . import SEED, TAXON_LEVELS, LOGGING_LEVEL
+from .utils import save_yaml_file
+
 from typing import List, Tuple, Dict
 
 
+from . import LOGGING_LEVEL, INFO
+
+TAXON_LEVELS = levels = ['order', 'family', 'genus']
+SEED = 42
+LOGGING_LEVEL = INFO
+
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
-
 
 def parse_options():
     """ Parse command line arguments """
@@ -167,19 +172,23 @@ def save_class_images(splits: dict, class_name: str, output: Path = Path('datase
         if len(split_img) == 0:
             continue
         parent = output / split_name / class_name
+        
         parent.mkdir(parents=True, exist_ok=True)
 
+        
         logger.debug(f'Writing images to {parent}')
         for img in tqdm(split_img,
                         desc=f'Copying {len(split_img)} {split_name} images of {class_name.replace("_", " ")} class'):
             src = Path(img)
             dst = parent / src.name
-            if not dst.is_file():
+            
+            if not dst.is_file() and src.is_file():
                 if use_symlinks:
+                    
                     dst.symlink_to(src)
                 else:
                     copy_img(src, dst)
-
+            
 
 def add_reference_images(splits: dict, class_name: str, reference_images_dir: Path) -> dict:
     """
@@ -301,9 +310,10 @@ def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.Data
         Dataframe with the number of images per class in each split, columns are split names (train,test,val), rows are class ids
     """
     counts = []
+
     for class_id, split in splits.items():
         # id, train, test, val
-        counts.append({"id":class_id,**{split_name: len(image_paths) for split_name, image_paths in split.items()}})
+        counts.append({"morphos_id":class_id,**{split_name: len(image_paths) for split_name, image_paths in split.items()}})
     return pd.DataFrame(counts)
 
 def generate_split_class_report(splits, taxon_map:pd.DataFrame):
@@ -318,12 +328,17 @@ def generate_split_class_report(splits, taxon_map:pd.DataFrame):
         pd.DataFrame: A dataframe including  morpho-species name and the count of samples in each split (test, train, val)
     """
     counts_df = get_count_per_class_split(splits)
-    counts_df["id"] = counts_df["id"].astype(int)
-    counts_df = taxon_map[['id', 'name']].merge(counts_df, left_on='id', right_on='id', how='right')
-    counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
-    return counts_df.sort_values(by="name")
 
-def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool, classification_method: str,
+    counts_df["morphos_id"] = counts_df["morphos_id"].astype(int)
+  
+    taxon_map.drop('specimen_id', inplace=True, axis=1)
+    taxon_map.drop_duplicates(inplace=True)
+    counts_df = taxon_map[['morphos_id', 'morphos_name']].merge(counts_df, on='morphos_id', how='right')
+    counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
+    
+    return counts_df.sort_values(by="morphos_name")
+
+def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool, 
                   refimages: pd.DataFrame = None, save_yaml: bool = True, seed: int = SEED, **kwargs):
     """
     Split images of a dataset in train/val/test. The splitting preserves the distribution of samples per class in each
@@ -333,7 +348,6 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
         train_size: Proportion of images reserved for train. Val/Test sizes are computed as (1 - train_size)/2
         output: Path to output directory
         save_yaml: Create yaml splits file
-        classification_method: Either 'GBIF' or 'morphospecie'
         seed: Random state
         **kwargs: For yaml file name pass `yaml_name` as keyword argument
     """
@@ -342,26 +356,12 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
 
     df = df.copy()
 
-    if classification_method == 'GBIF':
-        # Generate class names and add reference images
-        rank = kwargs.get('rank', 'genus')
-        taxon_ranks = TAXON_LEVELS[:TAXON_LEVELS.index(rank) + 1]
-        if refimages is not None:
-            # Only use refimages of rank present in BugBox images
-            df = pd.concat([df, refimages[refimages[rank].isin(df[rank])]], axis=0)
-        df.replace('', np.nan, inplace=True)  # Handle empty strings
-        df.dropna(subset=taxon_ranks, inplace=True)
-        df['class_name'] = df[taxon_ranks].agg(' '.join, axis=1)
-        name_column = 'class_name'
-        underrepresented_name = 0
-    elif classification_method == 'morphospecie':
-        df.replace('', np.nan, inplace=True)  # Handle empty strings
-        df.dropna(subset=['morphospecie_id'], inplace=True)
-        df['class_name'] = df['morphospecie_id']
-        name_column = "morphospecies"
-        underrepresented_name = 3458
-    else:
-        raise ValueError(f'\"{classification_method}\" is not a valid classification method')
+    df.replace('', np.nan, inplace=True)  # Handle empty strings
+    df.dropna(subset=['morphos_id'], inplace=True)
+    df['class_name'] = df['morphos_id']
+    name_column = "morphos_name"
+    underrepresented_name = 3458
+
     # When using morphospecies class name here is actually the id of the class, converted to str, not the name
     images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented
     # Moves the underrepresented classes to incertae sedis
@@ -379,9 +379,9 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
 
         train, test_val = train_test_split(image_list, train_size=train_size, random_state=seed)
         val, test = train_test_split(test_val, train_size=0.5, random_state=seed)
-
+        
         splits[class_name] = {'train': train, 'val': val, 'test': test}
-
+        
         save_class_images(splits, class_name, output, use_symlinks)
 
     if save_yaml:

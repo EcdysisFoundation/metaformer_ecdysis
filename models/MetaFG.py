@@ -5,8 +5,8 @@ from timm.models.helpers import load_pretrained
 from timm.models.registry import register_model
 from timm.models.layers import trunc_normal_
 
-from MBConv import MBConvBlock
-from MHSA import MHSABlock, Mlp
+from .MBConv import MBConvBlock
+from .MHSA import MHSABlock, Mlp
 
 
 def _cfg(url='', **kwargs):
