@@ -23,8 +23,14 @@ class BugBoxData:
         Returns: Panda's DataFrame with the results of the query
         """
 
-        specimen_df = pd.read_csv('data/specimen_data.csv')
-        return specimen_df
+        specimen_df = pd.read_csv('testing_data/data_test3.csv')
+        print(specimen_df.columns.tolist())
+        print(specimen_df['morphos_name'].nunique())
+        print(specimen_df.shape)
+        #specimen_df = specimen_df.groupby(specimen_df['morphos_name']).filter(lambda x: len(x) >= 20).reset_index(drop=True)
+        print(specimen_df['morphos_name'].nunique())
+        print(specimen_df.shape)
+        return pd.DataFrame(specimen_df)
 
     def get_reviewed_images_df(self, columns: List[str] = None) -> pd.DataFrame:
         """
@@ -39,7 +45,7 @@ class BugBoxData:
         """
 
         reviewed_images = self.get_df()
-        
+#        print(reviewed_images)
         reviewed_images = reviewed_images[['morphos_name','morphos_id','specimen_id','uuid','image', 'specimen_count']]
 
         if columns is not None:

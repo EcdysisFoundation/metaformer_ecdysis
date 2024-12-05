@@ -26,7 +26,6 @@ from shutil import copy, SameFileError
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from tqdm import tqdm
 
 from .utils import save_yaml_file
 
@@ -34,6 +33,8 @@ from typing import List, Tuple, Dict
 
 
 from . import LOGGING_LEVEL, INFO
+
+from tqdm import tqdm
 
 TAXON_LEVELS = levels = ['order', 'family', 'genus']
 SEED = 42
@@ -354,29 +355,40 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
     if not 0 < train_size <= 1:
         raise ValueError('Train size must be between 0 and 1')
 
-    df = df.copy()
-
+    df=df.copy()
+    
     df.replace('', np.nan, inplace=True)  # Handle empty strings
     df.dropna(subset=['morphos_id'], inplace=True)
     df['class_name'] = df['morphos_id']
     name_column = "morphos_name"
     underrepresented_name = 3458
 
+
+
+
+#    counts = df['morphos_name'].value_counts(dropna=False) 
+ #   valids = counts[counts<20].index
+
+  #  print(df[df['morphos_name'].isin(valids)])
+
+#    print(df[df['morphos_name'].value_counts() <= 20])
+    #images = df['class_name','image'] 
     # When using morphospecies class name here is actually the id of the class, converted to str, not the name
     images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented
     # Moves the underrepresented classes to incertae sedis
-    images, underrepresented_classes = filter_underrepresented(images, kwargs.get('min_images', 20), underrepresented_name)
-    
+    #images, underrepresented_classes = filter_underrepresented(images, kwargs.get('min_images', 20), underrepresented_name)
+    #print(images)
+#  print(images.columns.tolist())
+   # print(images[images['class_name']==3458])   
     # Save which classes are replaced by incertae sedis and how many sample in total are in each class
-    underrepresented_df = df[df['class_name'].isin(underrepresented_classes)][[name_column]].value_counts().reset_index(name="total_samples").sort_values(["total_samples",name_column],ascending=[False,True])
-    underrepresented_df.to_csv(output / 'underrepresented_classes.csv',index=False)
-    
+    #underrepresented_df = df[df['class_name'].isin(underrepresented_classes)][[name_column]].value_counts().reset_index(name="total_samples").sort_values(["total_samples",name_column],ascending=[False,True])
+    #underrepresented_df.to_csv(output / 'underrepresented_classes.csv',index=False)
+    print(len(images))    
     splits = {}
-
-
+    counter = 0
     for class_name, image_list in images.items():
         class_name = str(class_name)
-
+        counter = counter +1
         train, test_val = train_test_split(image_list, train_size=train_size, random_state=seed)
         val, test = train_test_split(test_val, train_size=0.5, random_state=seed)
         
@@ -384,6 +396,7 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
         
         save_class_images(splits, class_name, output, use_symlinks)
 
+    print(counter)
     if save_yaml:
         yaml_name = kwargs.get('yaml_name', 'splits.yaml')
         save_yaml_file({'seed': seed, 'splits': splits}, output, yaml_name)

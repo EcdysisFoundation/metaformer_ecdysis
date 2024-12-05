@@ -6,19 +6,27 @@ All required packages are installed in the `metaformer` conda virtual environmen
 metaformer` inside the shell. `conda run -n metaformer <command>` can be used to run a command inside the environment 
 without changing the base environment.
 
+The metaformer environment is the one that currently works. As far as I can tell, at present the metaformer-amp environment contains package versions that do not work with the model. Attempting to use Nano in the metaformer environment results in a segmentation fault, so I've been using vim.
 
 ## Dataset generation
+
+Test and training CSV files are generated on ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/create_test_csv.py` with Django queries. 
+
+To create the file, run `sudo docker compose -f local.yml run --rm django python manage.py create_test_csv` from the bugbox root directory. 
+An scp command can be used to copy the file from `/srv/bugbox3/bugbox3/core/management/commands/testing_data` in ecdysis01 into `testing_data/` in the MetaFormer root directory on ecdysis02. 
 
 To generate a dataset ready for model training execute `python -m dataset_generation`. Use the option `-h` to see all
 options available. The parameters to set the connection to the remote server should be inside `connection.py` in the
 `dataset_generation` directory.
 
+
+
 ### Scripts and modules
-#### `db.py`
-Contains a custom class to interact with BugBox's database.
+#### `data.py`
+Contains a custom class to interact with the csv file generated from BugBox's database.
 
 #### `queries.py`
-Contains useful sql queries to extract data from BugBox's database.
+Contains useful sql queries to extract data from BugBox's database. No longer used and could be deleted.
 
 #### `generate_tree.py`
 
@@ -83,13 +91,15 @@ split_insect_samples.py [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-
 
 ### Main MetaFormer script
 
+
+
 To run a training using both GPUs available on a generated dataset execute
 ```commandline
-python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/MetaFG_2_384.yaml
+python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/ecdysis.yaml
  --dataset bugbox --data-path datasets/bugbox_morphospecie --tag tag --version version
- --pretrain pretrained/metafg_2_inat21_384.pth --ignore-user-warnings --use-checkpoint
+ --pretrain output/ecdysis/training_dir/last-trained-model.pth --ignore-user-warnings --use-checkpoint
 ```
-The parameters and options for the training procedure are defined in the configuration file (configs/MetaFG_2_384.yaml 
+The parameters and options for the training procedure are defined in the configuration file (configs/ecdysis.yaml 
 in the example). Arguments passed in the command line will overwrite those in the file. 
 
 To evaluate the model on the test set use
@@ -113,11 +123,23 @@ then open a browser and go to [](host-or-ip:6006)
 
 ## Deployment scripts
 
+
+### Test model `deploy/training.sh` 
+This script creates training set from a local .csv file and trains a MetaFormer model on this data. Does not deploy to the server. 
+*usage*:
+```commandline
+   bash deploy/training.sh "test_directory" "test_model_name"
+```
+   *positional arguments*:
+```
+    test_directory       Directory inside the output/ecdysis directory
+    test_model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
+ ```
+
 ### Test model deployment `deploy/test.sh`
 
 This script automatically lunches a local *Torchserve* instance, publishes the specified model and sends a picture to
 the prediction endpoint.
-
 *usage*:
 ```commandline
     bash deploy/test.sh "model_name" "image/path"
@@ -190,3 +212,4 @@ To request a classification of a local image use
 ```commandline
 curl -X POST host:8084/predictions/model_name -T path/to/image.jpg
 ```
+

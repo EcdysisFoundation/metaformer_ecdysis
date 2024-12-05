@@ -42,9 +42,13 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     Returns:
         dict[str,numpy array] 
     """
-    stats = metrics['StatScores']
-    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy(),
     
+    stats = metrics['StatScores']
+    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
+    #print('tp' + str(tp))
+    #print('fp' + str(fp))
+    #print('tn' + str(tn))
+    #print('fn' + str(fn))
     return {'TP': tp,
             'FP': fp,
             'TN': tn,
@@ -76,17 +80,23 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
     """
 
     pd.set_option('display.max_columns', None)  # show all columns in the head() method
+
     stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total_test").items()}
+    
     stats = pd.DataFrame(data=stats_data).fillna(0)
+    pd.set_option('display.max_rows', 2000)
+ 
     stats[id_name] =list(class_ids)
+    
     # Debug before and after
     logging.debug(f"Before splits merge:\n{stats.head(display)}")
     if split_df is not None:
         logging.debug(f"Split df:\n{split_df.head(display)}")
         # will merge with the name, for debugging purposes
-        split_df = split_df[["id","name","train","test","val","total_samples"]]
+        split_df = split_df[["morphos_id","morphos_name","train","test","val","total_samples"]]
+
         # They should have the same classes, but let's use left to catch any issues
-        stats = split_df.merge(stats,how="left",right_on="morphospecie_id",left_on="id")
+        stats = split_df.merge(stats,how="left",right_on="morphos_id",left_on="morphos_id")
     logging.debug(f"After splits merge:\n{stats.head(display)}")
 
     # verify that total_test == test, as as check. 
@@ -97,7 +107,7 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
 
     stats.rename(columns={"total_samples":"total"},inplace=True)
     # drop total_test column (which is only test), the total we want is train+test+val
-    stats.drop(["total_test","name","id"],inplace=True,axis=1,errors='raise') #remove debug columns
+    stats.drop(["total_test","morphos_name","morphos_id"],inplace=True,axis=1,errors='raise') #remove debug columns
 
     # orient='records' follows the format [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
     # result adds the version field and puts the report inside data
@@ -121,7 +131,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, s
     """
     stats_data = _get_stats_from_metrics(metrics,'Total samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
-
+    
     if save_csv:
         # csv = Path(output_dir)/'eval_stats.csv'
         stats.to_csv(output)

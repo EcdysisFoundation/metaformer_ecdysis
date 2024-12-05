@@ -4,6 +4,7 @@ import time
 import argparse
 import datetime
 import warnings
+import pdb
 from pathlib import Path
 from typing import List
 
@@ -13,6 +14,8 @@ import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.autograd.profiler as profiler
+
 
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import accuracy, AverageMeter
@@ -30,6 +33,12 @@ from optimizer import build_optimizer
 from logger import create_logger
 from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_helper, reduce_tensor, load_pretained
 from torch.utils.tensorboard import SummaryWriter
+
+#os.environ["NCCL_DEBUG"] = "TRACE"
+#os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+#os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+#os.environ["VLLM_TRACE_FUNCTION"] = "1"
+
 try:
     # noinspection PyUnresolvedReferences
     from apex import amp
@@ -57,8 +66,7 @@ def parse_option():
                              'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
-    parser.add_argument('--use-checkpoint', action='store_true',
-                        help="whether to use gradient checkpointing to save_csv memory")
+    parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save_csv memory")
     parser.add_argument('--amp-opt-level', type=str, default='O0', choices=['O0', 'O1', 'O2'],
                         help='mixed precision opt level, if O0, no amp is used')  # Disabled by default due to apex library installation issues
     parser.add_argument('--amp', action='store_true', help='Use Pytorch\'s native Automatic Mixed Precision')
@@ -88,7 +96,7 @@ def parse_option():
     parser.add_argument('--sampler', type=str, default=None, choices=('weighted',), help='Type of training sampler')
     
     parser.add_argument('--dataset', type=str,
-                        help='dataset')
+                        help='dataset', default='bugbox')
     parser.add_argument('--lr-scheduler-name', type=str,
                         help='lr scheduler name,cosin linear,step')
     
@@ -111,7 +119,8 @@ def parse_option():
 
 
 def main(config):
-
+#    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it. 
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -123,30 +132,46 @@ def main(config):
         # The data needs to be loaded before the model is created to fill the num_classes field
         dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
+    device = torch.device("cuda")
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
-
+    
     metrics = get_model_metrics(config)
     model.metrics = metrics  # This need to be here to avoid problems with distributed training
 
-    model.cuda()
+    model = model.cuda()
+    #(device)
+    
 
     scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
 
     optimizer = build_optimizer(config, model)
+    #rand_tensor = torch.rand(2,3,384,384)
+    
+    #print(rand_tensor)
+    #rand2_tensor = rand_tensor.cuda()
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
+    print(torch.cuda.is_available())
+    
+    #print(type(rand2_tensor))
+    #print(rand2_tensor)
     model_without_ddp = model.module
+        
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        
     logger.info(f"Number of trainable parameters: {n_parameters}")
+    
 
     if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
+        #breakpoint()
         validate(config, data_loader_test, model, 0, metrics)
         return
-
+    
     if hasattr(model_without_ddp, 'flops'):
         flops = model_without_ddp.flops()
         logger.info(f"Number of GFLOPs: {flops / 1e9}")
+    
     lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
     if config.AUG.MIXUP > 0.:
         # smoothing is handled with mixup label transform
@@ -155,7 +180,7 @@ def main(config):
         criterion = LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
     else:
         criterion = torch.nn.CrossEntropyLoss()
-
+    
     if config.TRAIN.AUTO_RESUME:
         resume_file = auto_resume_helper(config.OUTPUT)
         if resume_file:
@@ -167,7 +192,7 @@ def main(config):
             logger.info(f'auto resuming from {resume_file}')
         else:
             logger.info(f'no checkpoint found in {config.OUTPUT}, ignoring auto resume')
-
+    
     max_accuracy = 0.0
     if config.MODEL.RESUME:
         logger.info(f"**********normal test***********")
@@ -189,15 +214,15 @@ def main(config):
     tb_dir = Path(config.OUTPUT) / 'tensorboard'
     tb_dir.mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=tb_dir)
-
     # Early stopping
     stopper = EarlyStopper(patience=config.TRAIN.EARLY_STOP.PATIENCE, min_delta=config.TRAIN.EARLY_STOP.MIN_DELTA)
-
+    #breakpoint() 
     start_time = time.time()
     with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1,
               unit='epoch', initial=config.TRAIN.START_EPOCH) as pbar:
         for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
             # Train
+            
             data_loader_train.sampler.set_epoch(epoch)
             train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
                                        lr_scheduler, scaler, writer)
@@ -253,6 +278,12 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         model.module.total_epoch = config.TRAIN.EPOCHS
     optimizer.zero_grad()
 
+   # rand_tensor = torch.rand(1,2,3,3)
+  #  print(rand_tensor)
+
+ #   rand_tensor = rand_tensor.cuda(non_blocking=True)
+#    print(rand_tensor)
+
     num_steps = len(data_loader)
     loss_meter = AverageMeter()
     norm_meter = AverageMeter()
@@ -260,7 +291,15 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
     pbar_description = f'Training | Rank {dist.get_rank()} | ' \
                        f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
     with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
+
+        device = torch.device('cuda')
         for idx, data in enumerate(data_loader):
+
+            if idx == 0:
+                start_time = time.time()
+   
+            elif idx == 1:
+                print(f"Time to load a single batch: {time.time() - start_time} seconds")
             if config.DATA.ADD_META:
                 samples, targets, meta = data
                 meta = [m.float() for m in meta]
@@ -268,22 +307,21 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
                 meta = meta.cuda(non_blocking=True)
             else:
                 samples, targets= data
-                meta = None
-
+                meta = None 
             samples = samples.cuda(non_blocking=True)
             targets = targets.cuda(non_blocking=True)
-
+            
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
-
+            
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=config.USE_AMP):
                 if config.DATA.ADD_META:
+
                     outputs = model(samples, meta)
                 else:
-                    outputs = model(samples)
-
+                    outputs = model(samples)                    
                 loss = criterion(outputs, targets)
-
+            print('arrived at config.train_accumulation')
             if config.TRAIN.ACCUMULATION_STEPS > 1:
                 loss = loss / config.TRAIN.ACCUMULATION_STEPS
                 scaler.scale(loss).backward()
@@ -375,7 +413,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
             images = images.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
-
+            
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 if config.DATA.ADD_META:
                     output = model(images, meta)
@@ -385,7 +423,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 # measure accuracy and record loss
                 loss = criterion(output, target)
                 acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
-
+                
                 metric.update(output, target)
 
                 acc1 = reduce_tensor(acc1)
@@ -395,8 +433,6 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 loss_meter.update(loss.item(), target.size(0))
                 acc1_meter.update(acc1.item(), target.size(0))
                 acc5_meter.update(acc5.item(), target.size(0))
-
-            # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
@@ -406,6 +442,9 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
     epoch_metric = metric.compute()
+    
+    
+    
 
     if tb_logger is not None:
         step = epoch
@@ -413,24 +452,25 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
     if config.EVAL_MODE and dist.get_rank() == 0:
-        # taxon map contents are for example:
-        # id,name,taxon_id 
-        # 3480,Gracillariidae 007,9103399
-        # where id is morphospecie id
-        id_column = 'morphospecie_id'
+        
+
+        id_column = 'morphos_id'
         display = 3 # how many entries to display for debug purposes
-        classes_df =  pd.read_csv('deploy/taxon_map.csv', index_col='id')
+        classes_df =  pd.read_csv('deploy/taxon_map.csv')
         logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        # get class ids and names in the same order as in the dataset
-        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()["id"]
-        class_names = classes_df.loc[map(int, config.DATA.CLASS_NAMES), 'name']
+        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()["morphos_id"]
+           
+        class_names = classes_df['morphos_name'].drop_duplicates().reset_index(drop =True)
+        
         logger.info(f"First class_names :\n{list(class_names[:display])}")
-        # get CSV stats using the names
         stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
-        # We saved the split info on a CSV
+
         split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
+
+        print('split_df' + str(len(split_df)))
+        print('stats' + str(len(stats)))
         logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
         logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
         json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
@@ -473,8 +513,8 @@ def setup_distributed(config):
     else:
         rank = -1
         world_size = -1
-    torch.cuda.set_device(config.LOCAL_RANK)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://', world_size=world_size, rank=rank)
+    torch.cuda.device(config.LOCAL_RANK)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://', timeout = datetime.timedelta(seconds=5400), world_size=world_size, rank=rank)
     torch.distributed.barrier()
     seed = config.SEED + dist.get_rank()
     torch.manual_seed(seed)
@@ -483,6 +523,7 @@ def setup_distributed(config):
 
 
 if __name__ == '__main__':
+
     args, config = parse_option()
     logging.basicConfig(level=logging.INFO)
 
@@ -493,7 +534,7 @@ if __name__ == '__main__':
         assert amp is not None, "amp not installed!"
 
     setup_distributed(config)
-
+    print(config.OUTPUT)
     # linear scale the learning rate according to total batch size, may not be optimal
     linear_scaled_lr = config.TRAIN.BASE_LR * config.DATA.BATCH_SIZE * dist.get_world_size() / 512.0
     linear_scaled_warmup_lr = config.TRAIN.WARMUP_LR * config.DATA.BATCH_SIZE * dist.get_world_size() / 512.0
@@ -513,10 +554,10 @@ if __name__ == '__main__':
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
                            local_rank=config.LOCAL_RANK)
 
+    
     main(config)
 
     if dist.get_rank() == 0 and not config.EVAL_MODE:
         path = os.path.join(config.OUTPUT, "config.yaml")
         with open(path, "w") as f:
             f.write(config.dump())
-        logger.info(f"Full config saved to {path}")
