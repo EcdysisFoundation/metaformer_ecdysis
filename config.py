@@ -198,9 +198,10 @@ _C.LOCAL_RANK = 0
 
 def _update_config_from_file(config, cfg_file):
     config.defrost()
+    
     with open(cfg_file, 'r') as f:
         yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
-
+    
     for cfg in yaml_cfg.setdefault('BASE', ['']):
         if cfg:
             _update_config_from_file(

@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 import sys
-sys.path.append(r"C:/Users/ecdys/EmilyE/Work/metaformer_ecdysis")
+sys.path.append(r"")
 from .data import BugBoxData
 from .split import split_from_df, generate_split_class_report
 from .utils import drop_identical_images
@@ -22,10 +22,10 @@ logger.setLevel(LOGGING_LEVEL)
 def get_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description='Data generation pipeline for BugBox images')
-    parser.add_argument('--bugbox-mnt', type=str, default='/srv/bugbox3/bugbox3/media/',
+    parser.add_argument('--bugbox-mnt', type=str, default='/pool1/srv/bugbox3/bugbox3/media/',
                         help='Path to BugBox images mounted directory')
     parser.add_argument('--train-size', type=float, default=0.6, help='Relative size of the train split')
-    parser.add_argument('--dataset-name', type=str, default='bugbox', help='Name of the generated dataset')
+    parser.add_argument('--dataset-name', type=str, default='bugbox_model_test4', help='Name of the generated dataset')
     parser.add_argument('--reference-image', type=str, default='/pool1/ref_images/gen2-19-vcm/',
                         help='Path to reference images root directory')
     parser.add_argument('--drop-duplicates', action='store_true', help='Drop duplicate images from the dataset')
@@ -48,14 +48,20 @@ def main():
     dataset_dir.mkdir(exist_ok=True, parents=True)
 
     db = BugBoxData()
+
+ #   reviewed_images = db[['morphos_name','morphos_id','specimen_id','uuid','image', 'specimen_id']]
+#    print(reviewed_images.head()) 
     images = db.get_reviewed_images_df()
     
-    print(images.columns.tolist())
+#    print(images[images['morphos_id'] == '3458'])
+ #   print(images)
     images['image'] = images['image'].apply(lambda x: str(bugbox_mnt / x))
    
     if args.drop_duplicates:
         images = drop_identical_images(images)
 
+    
+    print(images['morphos_name'].nunique())
     refimages = None
 
     splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy,

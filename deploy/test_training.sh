@@ -47,7 +47,7 @@ wait
 
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node $GPU_COUNT --master_port 12345 main.py \
-  --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval \
+  --cfg "output/ecdysis/test_trainings/23/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval \
   --pretrain "${MODEL_PREFIX}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION"
 wait
 

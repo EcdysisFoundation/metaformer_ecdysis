@@ -93,6 +93,7 @@ def build_loader(config):
                 prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
                 label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
 
+        #breakpoint()
         return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
 
 
@@ -152,6 +153,8 @@ def build_dataset(is_train, config, logger):
         nb_classes = 100
     elif config.DATA.DATASET.startswith('bugbox'):
         dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
+        
+        #print('hllo')
         if is_train:
             config.DATA.CLASS_NAMES = dataset.classes
     else:

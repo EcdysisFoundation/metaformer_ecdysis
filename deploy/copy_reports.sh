@@ -14,4 +14,4 @@ THIS_VERSION=$3
 mkdir -p "${MODEL_PREFIX}/${THIS_VERSION}"
 # add version number to files
 cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report_${THIS_VERSION}.csv"
-cp "datasets/${DATASET}/underrepresented_classes.csv" "${MODEL_PREFIX}/${THIS_VERSION}/underrepresented_classes_${THIS_VERSION}.csv"
+#cp "datasets/${DATASET}/underrepresented_classes.csv" "${MODEL_PREFIX}/${THIS_VERSION}/underrepresented_classes_${THIS_VERSION}.csv"
