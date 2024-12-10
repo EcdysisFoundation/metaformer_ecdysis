@@ -11,14 +11,12 @@ cd /home/ecdysis/MetaFormer/
 MODEL_PREFIX="output/ecdysis/$1"
 
 
-DEPLOYED_VERSION=$(curl  "$1:8085/models/metaformer" -s | jq -r .[0].modelVersion)
-VERSION_MAJOR=$(echo "$LAST_VERSION" | cut -d. -f1)
-VERSION_MINOR=$(echo "$LAST_VERSION" | cut -d. -f2)
+DEPLOYED_MODEL=$(curl "ecdysis01.local:8085/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
 THIS_VERSION="$2"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "deployed version is ${DEPLOYED_VERSION}"
-echo "Hardcoded version: 1.22" #${LAST_VERSION}"
+echo "Hardcoded version: 1.22" # replace hardcoding when ready
 echo "This new version is: ${THIS_VERSION}"
 echo "Found ${GPU_COUNT} GPU(s)"
 
@@ -34,7 +32,7 @@ wait
 # Run training starting from last best checkpoint
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis_test.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
-  --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings > "${MODEL_PREFIX}/${THIS_VERSION}/console_output.txt" # Avoid user warnings on logs
+  --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings # Avoid user warnings on logs
 wait
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py \

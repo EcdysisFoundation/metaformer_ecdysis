@@ -4,12 +4,12 @@ Run `python -m data_pipeline {GBIF,morphospecie}` to generate a ready to train a
 using either GBIF's taxon ids or Ecdysis's Morphospecie as classification criteria. Use `-h` option to get information
 about other optional parameters.
 
-> Execute all scripts from the root directory of the repository and as a python module, e.g. 
+> Execute all scripts from the root directory of the repository and as a python module, e.g.
 > `python -m data_scripts.generate_tree ...`. Use `-h` option to get usage instructions.
 
 ### `generate_tree.py`
 
-Generates directory structure for classified insect pictures, where every taxon level is represented by a subdirectory. 
+Generates directory structure for classified insect pictures, where every taxon level is represented by a subdirectory.
 For example:
 ```
 root/
@@ -48,7 +48,7 @@ root/
      └── Oscinella
 ```
 
-*usage*: split_insect_samples.py  [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-images MIN_IMAGES] 
+*usage*: split_insect_samples.py  [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-images MIN_IMAGES]
                                 [--debug] [--seed SEED] [--no-copy] [--follow-symlinks]
                                 [--yaml-file YAML_FILE] [--add-reference-images] [--reference-image-path REFERENCE_IMAGE_PATH]
                                 input_directory output_directory
@@ -56,13 +56,4 @@ root/
 *positional arguments*:
   input_directory       Path to input directory. Images must be inside subdirectories named as the class they belong to.
   output_directory      Output directory
-
-### `db.py`
-
-Has a custom class with useful methods to connect to BugBox database and retrieve data. It is not ment to be used as a
-script. Connection parameters should be added to an `connection.py` file.
-
-### `queries.py`
-
-SQL queries templates used to get images metadata form BugBox database.
 
