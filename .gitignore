@@ -152,3 +152,6 @@ dmypy.json
 *.zip
 csv_output/
 *.csv
+deploy/model_store/*
+pretrained/*
+tests/tb_accuracy_test/*

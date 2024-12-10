@@ -23,7 +23,7 @@ class BugBoxData:
         Returns: Panda's DataFrame with the results of the query
         """
 
-        specimen_df = pd.read_csv('testing_data/data_test3.csv')
+        specimen_df = pd.read_csv('dataset_generation/training_selections.csv')
         print(specimen_df.columns.tolist())
         print(specimen_df['morphos_name'].nunique())
         print(specimen_df.shape)
@@ -46,7 +46,7 @@ class BugBoxData:
 
         reviewed_images = self.get_df()
 #        print(reviewed_images)
-        reviewed_images = reviewed_images[['morphos_name','morphos_id','specimen_id','uuid','image', 'specimen_count']]
+        reviewed_images = reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
 
         if columns is not None:
             reviewed_images = reviewed_images[columns]
