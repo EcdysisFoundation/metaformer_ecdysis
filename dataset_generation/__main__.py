@@ -19,7 +19,7 @@ logger.setLevel(LOGGING_LEVEL)
 def get_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description='Data generation pipeline for BugBox images')
-    parser.add_argument('dataset-name', type=str, help='Name of the generated dataset')
+    parser.add_argument('dataset', type=str, help='Name of the generated dataset')
     parser.add_argument('--bugbox-mnt', type=str, default='/pool1/srv/bugbox3/bugbox3/media/',
                         help='Path to BugBox images mounted directory')
     parser.add_argument('--train-size', type=float, default=0.6, help='Relative size of the train split')
@@ -37,7 +37,7 @@ def main():
     assert 0 < args.train_size <= 1, 'Train size must be between 0 and 1'
 
     bugbox_mnt = Path(args.bugbox_mnt)
-    dataset_dir = Path(f'datasets/{args.dataset_name}')
+    dataset_dir = Path(f'datasets/{args.dataset}')
     dataset_dir.mkdir(exist_ok=True, parents=True)
 
     db = BugBoxData()

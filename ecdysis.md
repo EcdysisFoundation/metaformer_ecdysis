@@ -2,36 +2,37 @@
 
 ## Environment
 
-All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate
-metaformer` inside the shell. `conda run -n metaformer <command>` can be used to run a command inside the environment
-without changing the base environment.
+All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate metaformer` inside the shell. `conda run -n metaformer <command>` can be used to run a command inside the environment without changing the base environment.
 
-The metaformer environment is the one that currently works. As far as I can tell, at present the metaformer-amp environment contains package versions that do not work with the model. Attempting to use Nano in the metaformer environment results in a segmentation fault, so I've been using vim.
+see https://docs.conda.io/projects/conda/en/latest/commands/run.html and consider using --no-capture-output when running repeatable long running trainings.
+
+At present the metaformer-amp environment contains package versions that do not work with the model. Attempting to use Nano in the metaformer environment results in a segmentation fault, but vim works. Nano in metaformer environment likely broken from previous modifications of LD_LIBRARY_PATH.
 
 ## Dataset generation
 
-Test and training CSV files are generated on ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/create_test_csv.py` with Django queries.
+Test and training CSV files are generated on ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/create_test_csv.py` with Django queries.cd
 
 To create the file, run `docker compose -f local.yml run --rm django python manage.py create_test_csv` from the bugbox root directory.
-An scp command can be used to copy the file from `/srv/bugbox3/bugbox3/core/management/commands/testing_data` in ecdysis01 into `testing_data/` in the MetaFormer root directory on ecdysis02.
+An scp command can be used to copy the file from `/srv/bugbox3/bugbox3/core/management/commands/testing_data` in ecdysis01 into `dataset_generation/` in the MetaFormer root directory on ecdysis02.
 
-To generate a dataset ready for model training execute `python -m dataset_generation`. Use the option `-h` to see all
-options available. This is also called in training.sh
+To generate a dataset ready for model training execute `python -m dataset_generation`. Use the option `-h` to see all options available. This is also called in `training.sh` and should only be ran directly if the intent is to generate a dataset only and not run `training.sh`.
 
 ## Training
 
-Currently training is done by ... `deploy/training.sh`
+Currently training is done with ... `deploy/training.sh`
 
 This script creates training set from a local .csv file and trains a MetaFormer model on this data. Does not deploy to the server.
 *usage*:
 ```commandline
-   bash deploy/training.sh "test_directory" "test_model_name"
+   bash deploy/training.sh "directory" "model_name"
 ```
    *positional arguments*:
 ```
-    test_directory       Directory inside the output/ecdysis directory
-    test_model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
+    directory       Directory inside the output/ecdysis directory
+    model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
  ```
+ When running with one or two epochs for testing (`configs/ecdysis_test.yaml`), can run as above to see output, but for longer runs to prevent it from halting when the terminal session times out, will need to run it for example as `nohup bash deploy/training.sh "directory" "model_name" &` where nohup prints output to nohup.out and the "&" symbol runs it in the background. Then, display running jobs with `jobs -l`. Or, follow tail with `tail -f nohup.out `.
+
 
 ## ALL INFO BELOW MAY BE DATED. NEEDS REVISION AS NEW PROCESS IS FINALIZED.
 

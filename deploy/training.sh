@@ -30,7 +30,7 @@ wait
 
 
 # Run training starting from last best checkpoint
-python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis_test.yaml \
+python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
   --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
 wait
