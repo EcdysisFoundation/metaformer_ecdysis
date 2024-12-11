@@ -19,10 +19,10 @@ logger.setLevel(LOGGING_LEVEL)
 def get_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description='Data generation pipeline for BugBox images')
+    parser.add_argument('dataset-name', type=str, help='Name of the generated dataset')
     parser.add_argument('--bugbox-mnt', type=str, default='/pool1/srv/bugbox3/bugbox3/media/',
                         help='Path to BugBox images mounted directory')
     parser.add_argument('--train-size', type=float, default=0.6, help='Relative size of the train split')
-    parser.add_argument('--dataset-name', type=str, default='bugbox_model_1', help='Name of the generated dataset')
     parser.add_argument('--drop-duplicates', action='store_true', help='Drop duplicate images from the dataset')
     parser.add_argument('--hard-copy', action='store_true', help='Copy images instead of symlinking them')
     parser.add_argument('--minimum-images', type=int, default=20, help='Do not create a class unless it has at least '

@@ -11,7 +11,7 @@ cd /home/ecdysis/MetaFormer/
 MODEL_PREFIX="output/ecdysis/$1"
 
 
-DEPLOYED_MODEL=$(curl "ecdysis01.local:8085/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
+DEPLOYED_VERSION=$(curl "ecdysis01.local:8085/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
 THIS_VERSION="$2"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
@@ -22,7 +22,7 @@ echo "Found ${GPU_COUNT} GPU(s)"
 
 DATASET="bugbox_model_${THIS_VERSION}"
 
-python -m dataset_generation --dataset-name "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
+python -m dataset_generation "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
 wait
 
 # Copy dataset report from dataset to model folder
@@ -32,7 +32,7 @@ wait
 # Run training starting from last best checkpoint
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis_test.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
-  --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings # Avoid user warnings on logs
+  --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
 wait
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py \
