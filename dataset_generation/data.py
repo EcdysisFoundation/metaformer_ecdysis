@@ -11,7 +11,7 @@ class BugBoxData:
         Returns: Panda's DataFrame with the results of the query
         """
 
-        specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections.csv')
+        specimen_df = pd.read_csv('dataset_generation/training_selections.csv')
         return pd.DataFrame(specimen_df)
 
     def get_reviewed_images_df(self, columns: List[str] = None) -> pd.DataFrame:
