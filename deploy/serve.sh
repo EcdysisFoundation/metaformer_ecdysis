@@ -15,11 +15,11 @@ torch-model-archiver --model-name "metaformer" --version "$3" --model-file "mode
   --force
 
 echo "Moving archive to pool1..."
-cp /home/ecdysis/MetaFormer/deploy/model_store/metaformer.mar /pool1/model-store || exit 11
+cp /home/ecdysis/MetaFormer/deploy/model_store/metaformer.mar /pool1/model-store-2 || exit 11
 wait
 
 echo "Publishing model to torchserve..."
-ERR_MSG=$(curl -s -X POST "$2:8085/models?url=metaformer.mar&initial_workers=1&synchronous=true" | jq -r '.message')
+ERR_MSG=$(curl -s -X POST "$2:8075/models?url=metaformer.mar&initial_workers=1&synchronous=true" | jq -r '.message')
 if [ "$ERR_MSG" != "null" ]
 then
   echo "Failed to serve model"
@@ -30,12 +30,12 @@ else
 fi
 wait
 
-curl -X PUT -s "$2:8085/models/metaformer/$3?min_worker=16&max_worker=32" | jq -r .status
-curl -X PUT -s "$2:8085/models/metaformer/$3/set-default" | jq -r .status
+curl -X PUT -s "$2:8075/models/metaformer/$3?min_worker=16&max_worker=32" | jq -r .status
+curl -X PUT -s "$2:8075/models/metaformer/$3/set-default" | jq -r .status
 sleep 30
 
 echo "Sending test request..."
-TEST_ID=$(curl -s "$2:8084/predictions/metaformer" -T "tests/diabrotica.JPG" | jq -r .taxonid)
+TEST_ID=$(curl -s "$2:8074/predictions/metaformer" -T "tests/diabrotica.JPG" | jq -r .taxonid)
 if [ "${TEST_ID}" = 1048497 ]
 then
   echo "Test prediction succeeded"

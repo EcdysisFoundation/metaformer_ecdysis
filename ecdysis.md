@@ -215,16 +215,16 @@ the inference API at port 8084.
 
 To check which models are currently deployed use
 ```commandline
-curl host:8085/models
+curl host:8075/models
 ```
 
 To get information about a specific model use
 ```commandline
-curl host:8085/models/model_name
+curl host:8075/models/model_name
 ```
 
 To request a classification of a local image use
 ```commandline
-curl -X POST host:8084/predictions/model_name -T path/to/image.jpg
+curl -X POST host:8074/predictions/model_name -T path/to/image.jpg
 ```
 

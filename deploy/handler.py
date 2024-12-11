@@ -120,7 +120,8 @@ class MetaformerHandler(VisionHandler):
                         'confidence': round(primary_confidence*100, 2),  # Convert to percentage
                         'morphospecie_id': int(labels),
                         'name': morphospecies,
-                        'optional_preds': []}
+                        'optional_preds': [],
+                        'modelVersion': self.manifest['model']['modelVersion']}
 
             # Add optional predictions if there is a confident primary prediction
             if primary_confidence >= minimum_confidence:

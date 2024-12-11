@@ -1,7 +1,7 @@
 ## Automatic training and deployment
 
 ### Torchserve
-We use [Torchserve](https://pytorch.org/serve/) for model deployment. Before deploying, the model definition and weights 
+We use [Torchserve](https://pytorch.org/serve/) for model deployment. Before deploying, the model definition and weights
 need to be archived in a `.mar` file. Optionally, a file containing the mapping between the model's output indices and
 the classes names can be provided.
 
@@ -14,19 +14,19 @@ torch-model-archiver --model-name metaformer --version 1.0 --model-file models/M
   --extra-files "config.py,MODEL/PATH/config.yaml,models/,deploy/inference.py,deploy/taxon_map.csv"
 ```
 
-Specific requirements can be added via the `--requirements-file` argument. Note that to use this option the 
+Specific requirements can be added via the `--requirements-file` argument. Note that to use this option the
 `install_py_dep_per_model` parameter has to be set to `true` in the server (the default is `false`).
 
 ### Inference
-The `inference.py` module has the base class for inference with the `metaformer` model. This module is used in the 
+The `inference.py` module has the base class for inference with the `metaformer` model. This module is used in the
 deployment but can be use independently, for example to test inference on a single image.
 
 ### Handler
-`handler.py` contains a subclass of Torchserve's `VisionHandler`. It defines the handling of inputs and the format of 
+`handler.py` contains a subclass of Torchserve's `VisionHandler`. It defines the handling of inputs and the format of
 the response for the model.
 
 ### Automatic training
-The bash script `automatic_training.sh` performs all the steps to train a new model and deploy it to a running 
+The bash script `automatic_training.sh` performs all the steps to train a new model and deploy it to a running
 Torchserve service.
 
 1. Backs up the last dataset and model.
@@ -52,7 +52,7 @@ Torchserve service.
       "precision": float,
       "recall": float,
       "f1": float,
-      "morphospecie_id": int      
+      "morphospecie_id": int
     },
     ...
   ]
@@ -63,13 +63,13 @@ Where train, test, and val are the counts for that morphospecie for each split, 
 8. Compresses old data to save storage space
 
 To execute the script you need to provide an address to the host running the Torchserve service (inference port 8084 and
-8085 for management) and a name for the new model. For example, if the following is executed:
+8075 for management) and a name for the new model. For example, if the following is executed:
 
 ```commandline
 bash deploy/automatic_training localhost morphospecies
 ```
 
-the training outputs will be stored in `./outouts/ecdysis/morphospecies` and the dataset in 
+the training outputs will be stored in `./outouts/ecdysis/morphospecies` and the dataset in
 `./datasets/bugbox_morphospecies`. The trained model will be published in the localhost Torchserve running instance.
 
 #### Test only training
@@ -86,7 +86,7 @@ Likewise the script `test_naming.sh` with the same parameters only runs the vers
 
 
 #### Serve a model
-The `serve.sh` script archives and publish a model to a running Torchserve service. It is used inside 
+The `serve.sh` script archives and publish a model to a running Torchserve service. It is used inside
 `automatic_training.sh`. Usage:
 
 ```commandline
@@ -94,7 +94,7 @@ bash deploy/serve.sh morphospecies localhost 1.0
 ```
 
 1. Archives the model.
-2. Copies the archive to `/pool1/model-store` shared directory.
+2. Copies the archive to `/pool1/model-store-2` shared directory.
 3. Publishes the model on running torchserve service.
 4. Set the number of workers and the default version.
 5. Test the process was succesful by asking for a prediction of a known easy image.

@@ -11,7 +11,7 @@ cd /home/ecdysis/MetaFormer/
 MODEL_PREFIX="output/ecdysis/$1"
 
 
-DEPLOYED_VERSION=$(curl "ecdysis01.local:8085/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
+DEPLOYED_VERSION=$(curl "ecdysis01.local:8075/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
 THIS_VERSION="$2"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
