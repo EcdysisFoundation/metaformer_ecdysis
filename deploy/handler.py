@@ -81,7 +81,7 @@ class MetaformerHandler(VisionHandler):
 
         [{ "taxonid": 5108951,
           "confidence": "99.92",
-          "morphospecie_id": 3458,
+          "morphospecies_id": 3458,
           "name": "Diphthera festiva",
           "optional_preds": [
             {
@@ -118,7 +118,7 @@ class MetaformerHandler(VisionHandler):
 
             response = {'taxonid': int(taxonid),
                         'confidence': round(primary_confidence*100, 2),  # Convert to percentage
-                        'morphospecie_id': int(labels),
+                        'morphospecies_id': int(labels),
                         'name': morphospecies,
                         'optional_preds': [],
                         'modelVersion': self.manifest['model']['modelVersion']}
