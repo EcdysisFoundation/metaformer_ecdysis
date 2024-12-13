@@ -1,23 +1,3 @@
-"""
-Split and make_directory_tree insect image files from a directory  to its assigned split. The output directory structure follows
-Imagenet format. Example:
-
-    datasets/insectagen/
-    ├── meta.yaml
-    ├── test
-    │    ├── Eribolus
-    │    ├── Liohippelates
-    │    └── Oscinella
-    ├── train
-    │    ├── Eribolus
-    │    ├── Liohippelates
-    │    └── Oscinella
-    └── val
-        ├── Eribolus
-        ├── Liohippelates
-        └── Oscinella
-
-"""
 import logging
 from pathlib import Path
 from shutil import copy, SameFileError
@@ -34,6 +14,26 @@ from typing import List, Tuple, Dict
 from . import LOGGING_LEVEL, INFO
 
 from tqdm import tqdm
+
+
+# Split and make_directory_tree insect image files from a directory  to its assigned split. The output directory structure follows
+# Imagenet format. Example:
+#
+#     datasets/insectagen/
+#     ├── meta.yaml
+#     ├── test
+#     │    ├── Eribolus
+#     │    ├── Liohippelates
+#     │    └── Oscinella
+#     ├── train
+#     │    ├── Eribolus
+#     │    ├── Liohippelates
+#     │    └── Oscinella
+#     └── val
+#         ├── Eribolus
+#         ├── Liohippelates
+#         └── Oscinella
+
 
 SEED = 42
 LOGGING_LEVEL = INFO
