@@ -155,3 +155,5 @@ csv_output/
 deploy/model_store/*
 pretrained/*
 tests/tb_accuracy_test/*
+local_files/*
+.DS_Store
