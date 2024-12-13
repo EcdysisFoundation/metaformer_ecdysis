@@ -2,48 +2,45 @@
 
 ## Environment
 
-All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate metaformer` inside the shell. `conda run -n metaformer <command>` can be used to run a command inside the environment without changing the base environment.
-
-see https://docs.conda.io/projects/conda/en/latest/commands/run.html and consider using --no-capture-output when running repeatable long running trainings.
+All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate metaformer` inside the shell.
 
 At present the metaformer-amp environment contains package versions that do not work with the model. Attempting to use Nano in the metaformer environment results in a segmentation fault, but vim works. Nano in metaformer environment likely broken from previous modifications of LD_LIBRARY_PATH.
 
 ## Dataset generation
 
-Test and training CSV files are generated on ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/create_test_csv.py` with Django queries.cd
-
-To create the file, run `docker compose -f local.yml run --rm django python manage.py create_test_csv` from the bugbox root directory.
-An scp command can be used to copy the file from `/srv/bugbox3/bugbox3/core/management/commands/testing_data` in ecdysis01 into `dataset_generation/` in the MetaFormer root directory on ecdysis02.
-
-To generate a dataset ready for model training execute `python -m dataset_generation`. Use the option `-h` to see all options available. This is also called in `training.sh` and should only be ran directly if the intent is to generate a dataset only and not run `training.sh`.
+Image selection CSV files are generated on Ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/...`. Production images are uploaded to AWS S3, while training images are accessed on the Ecdysis01 hardrive. Therefore, new images on AWS S3 need to be synced to Ecdysis01 before training begins. This sync process should be scheduled through BugBox's Celery Beat schedule. Before training a new model, ensure the desired training selections are generated from the BugBox managment command and AWS S3 images are synced after the trainging selections .csv file has been generated.
 
 ## Training
 
-Currently training is done with ... `deploy/training.sh`
+Currently training is done with ... `deploy/training.sh`. This uses the training selections file to structure images and files for model traning (see `dataset_generation`), starts the training, and runs some analytics at the end. It does not deploy to the trained model to the server. Output should be reviewed before deploying the newly trained model.
 
-This script creates training set from a local .csv file and trains a MetaFormer model on this data. Does not deploy to the server.
 *usage*:
 ```commandline
-   bash deploy/training.sh "directory" "model_name"
+    conda activate metaformer
+
+    bash deploy/training.sh "directory" "model_name"
 ```
    *positional arguments*:
-```
-    directory       Directory inside the output/ecdysis directory
-    model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
- ```
- When running with one or two epochs for testing (`configs/ecdysis_test.yaml`), can run as above to see output, but for longer runs to prevent it from halting when the terminal session times out, will need to run it for example as `nohup bash deploy/training.sh "directory" "model_name" &` where nohup prints output to nohup.out and the "&" symbol runs it in the background. Then, display running jobs with `jobs -l`. Or, follow tail with `tail -f nohup.out `.
 
+    - directory       Directory inside the output/ecdysis directory
+    - model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
 
-## ALL INFO BELOW MAY BE DATED. NEEDS REVISION AS NEW PROCESS IS FINALIZED.
+ When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki
+
+    `conda activate metaformer`
+
+    `bash deploy/training.sh morphospecies model_name > output/ecdysis/morphospecies/last_training.log 2>&1 &`
+
+    `exit`
+
+Then one can return later and determine if it still running with the last_training.log
+
 
 ### Scripts and modules
-#### `data.py`
-Contains a custom class to interact with the csv file generated from BugBox's database.
+#### `dataset_generation/data.py`
+Make a Pandas dataframe from the csv file generated from BugBox's database.
 
-#### `queries.py`
-Contains useful sql queries to extract data from BugBox's database. No longer used and could be deleted.
-
-#### `generate_tree.py`
+#### `dataset_generation/generate_tree.py` DEPRICATED?
 
 Generates directory structure for classified insect pictures, where every taxon level is represented by a subdirectory.
 For example:
@@ -56,16 +53,6 @@ root/
         ├── 979f8f3d-5198-4c4f-b424-77bab7d347c5_533.jpg
         └── Aeolothrips
             └── fe7c2bc2-4a66-4826-adf3-bd14c4547229_6739.jpg
-```
-*usage*:
-```
-  generate_data_from_csv.py [-h] [--top-hierarchy TOP_HIERARCHY] [--debug] data_path csv_path output_path
-```
-*positional arguments*:
-```
-  data_path             Path to the input data root directory
-  csv_path              Path to the csv file of insect data
-  output_path           Output directory path
 ```
 
 #### `split.py`
@@ -89,42 +76,7 @@ root/
      └── Oscinella
 ```
 
-*usage*:
-```
-split_insect_samples.py [-h] [--train-size TRAIN_SIZE] [--levels LEVELS] [--min-images MIN_IMAGES] [--debug]
-  [--seed SEED] [--no-copy] [--follow-symlinks] [--yaml-file YAML_FILE] [--add-reference-images]
-  [--reference-image-path REFERENCE_IMAGE_PATH] input_directory output_directory
-```
-*positional arguments*:
-```
-  input_directory       Path to input directory. Images must be inside subdirectories named as the class they belong to.
-  output_directory      Output directory
-```
 
-
-## Training and evaluation
-
-### Main MetaFormer script
-
-
-
-To run a training using both GPUs available on a generated dataset execute
-```commandline
-python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg configs/ecdysis.yaml
- --dataset bugbox --data-path datasets/bugbox_morphospecie --tag tag --version version
- --pretrain output/ecdysis/training_dir/last-trained-model.pth --ignore-user-warnings --use-checkpoint
-```
-The parameters and options for the training procedure are defined in the configuration file (configs/ecdysis.yaml
-in the example). Arguments passed in the command line will overwrite those in the file.
-
-To evaluate the model on the test set use
-```commandline
-python -m torch.distributed.launch --nproc_per_node 2 --master_port 12345 main.py --cfg output/ecdysis/model-name/config.yaml
- --dataset bugbox --data-path datasets/bugbox_morphospecie --tag tag --version version
- --pretrain output/ecdysis/model-name/best.pth --ignore-user-warnings --use-checkpoint --eval
-```
-Make sure to use the correct config and pretrained weights. Classification statistics are saved in csv format inside the
-output/ecdysis/model-name/ directory.
 
 ### Tensorboard
 
@@ -138,93 +90,8 @@ then open a browser and go to [](host-or-ip:6006)
 
 ## Deployment scripts
 
-
-### Test model `deploy/training.sh`
-This script creates training set from a local .csv file and trains a MetaFormer model on this data. Does not deploy to the server.
-*usage*:
-```commandline
-   bash deploy/training.sh "test_directory" "test_model_name"
-```
-   *positional arguments*:
-```
-    test_directory       Directory inside the output/ecdysis directory
-    test_model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
- ```
-
-### Test model deployment `deploy/test.sh`
-
-This script automatically lunches a local *Torchserve* instance, publishes the specified model and sends a picture to
-the prediction endpoint.
-*usage*:
-```commandline
-    bash deploy/test.sh "model_name" "image/path"
-```
-*positional arguments*:
-```
-    model_name        Metaformer model name (directory inside output/MetaFG_2 directory)
-    image_path        Path to the image to be send for testing
-```
-
-### Serve script `deploy/serve.sh`
-
-Serves model to a running *Torchserve* container with its management API published at port 8085. The archive is forcibly
-recreated, so it will overwrite an old archive if the new shares the same name.
-
-*usage*:
-```commandline
-    bash deploy/serve.sh "model_name" "host_address" "model_version"
-```
-*positional arguments*:
-```
-    model_name        Metaformer model name (directory inside output/ecdysis directory)
-    host_address      Host name or IP address (i.e. ecdysis01.local, localhost, 127.0.0.1)
-    model_version     Version identifier of the model (i.e. 1.0)
-```
-
-### Automatic training script `deploy/automatic_training.sh`
-
-Used as a cronjob to perform regular trainings. It automatically generates a dataset with all images available on
-BugBox, executes training and evaluation and deploys the model with the next available minor version.
-
-*usage*
-```commandline
-    bash deploy/automatic_training.sh "host-address" "model_name"
-```
-
-*positional_arguments*:
-```
-    host_address      Host name or IP address (i.e. ecdysis01.local, localhost, 127.0.0.1)
-    model_name        Metaformer model name (directory inside output/ecdysis directory)
-```
-
-For manually lunched trainings you can also use the command:
-```commandline
-run-metaformer-training
-```
-This is an alias for `conda run --live-stream -n metaformer-amp /home/ecdysis/MetaFormer/deploy/automatic_training.sh
-ecdysis01.local morphospecies`.
-
-> *Note:* Using `nohup` will not prevent the training process to be killed when the shell session is terminated. This is
-> due to an issue with signaling and Pytorch's distributed training (see https://github.com/pytorch/pytorch/issues/67538).
-> To run the training script in the background and close the terminal you must use `tmux` instead.
+TBD
 
 ### Torchserve inference and management
 
-The model are deployed using [Torchserve](https://pytorch.org/serve/). The management API is published at port 8085 and
-the inference API at port 8084.
-
-To check which models are currently deployed use
-```commandline
-curl host:8075/models
-```
-
-To get information about a specific model use
-```commandline
-curl host:8075/models/model_name
-```
-
-To request a classification of a local image use
-```commandline
-curl -X POST host:8074/predictions/model_name -T path/to/image.jpg
-```
-
+The model are deployed using [Torchserve](https://pytorch.org/serve/). see https://github.com/EcdysisFoundation/servemetaformer
