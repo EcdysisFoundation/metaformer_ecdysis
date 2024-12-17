@@ -14,35 +14,16 @@ class BugBoxData:
         specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections_1.csv')
         return pd.DataFrame(specimen_df)
 
-    def get_reviewed_images_df(self, columns: List[str] = None) -> pd.DataFrame:
-        """
-        Get table of reviewed images
-        Args:
-            columns: Subset of columns
-        Returns: Pandas DataFrame
-        """
-
+    def get_reviewed_images_df(self):
         reviewed_images = self.get_df()
-        reviewed_images = reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
+        return reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
 
-        if columns is not None:
-            reviewed_images = reviewed_images[columns]
+    def get_taxon_map_df(self):
+        taxon_map = self.get_df()
+        return taxon_map[['morphos_id', 'morphos_name','specimen_id']]
 
-        return reviewed_images
-
-
-    def get_morphospecies_df(self, columns: List[str] = None):
-        """
-        Get table of morphospecies ids
-        Args:
-            columns: Subset of columns
-
-        Returns: Pandas DataFrame
-        """
-
+    def get_morhospecies_df(self):
         morphospecies = self.get_df()
+        return morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
 
-        if columns is not None:
-            morphospecies = morphospecies[columns]
 
-        return morphospecies

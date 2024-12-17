@@ -1,5 +1,4 @@
 import csv
-import json
 import logging
 from pathlib import Path
 from typing import List
@@ -11,6 +10,8 @@ from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, Confu
 from yacs.config import CfgNode
 
 from datetime import datetime
+
+from .dataset_generation.data import BugBoxData
 from utils import save_json
 
 
@@ -130,23 +131,15 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
 
     Returns: Statistics data frame
     """
-    print('metrics')
-    print(metrics)
-    thecount = 0
-    for m in metrics:
-        print(m)
-        thecount += 1
-        if thecount > 100:
-            break
-
     stats_data = _get_stats_from_metrics(metrics,'Total samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
         stats.assign(model_name=version)
-        # csv = Path(output_dir)/'eval_stats.csv'
+        morhospecies_df = BugBoxData.get_morhospecies_df()
+        morhospecies_df.set_index('morphos_id', inplace=True)
+        stats = stats.merge(morhospecies_df, left_index=True, right_on='morphos_id')
         stats.to_csv(output)
-
     return stats
 
 

@@ -54,7 +54,7 @@ def main():
     meta_file = dataset_dir/'metadata.csv'
     images.to_csv(meta_file, index=False)
 
-    taxon_map = db.get_morphospecies_df(columns=['morphos_id', 'morphos_name','specimen_id'])
+    taxon_map = db.get_taxon_map_df()
     taxon_map.to_csv('deploy/taxon_map.csv', index=False)
 
     report_count_df = generate_split_class_report(splits, taxon_map)
