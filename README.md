@@ -27,11 +27,11 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 
  When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki
 
-    `conda activate metaformer`
+    conda activate metaformer
 
-    `bash deploy/training.sh morphospecies model_name > output/ecdysis/morphospecies/last_training.log 2>&1 &`
+    bash deploy/training.sh morphospecies model_name > output/ecdysis/morphospecies/last_training.log 2>&1 &
 
-    `exit`
+    exit
 
 Then one can return later and determine if it still running with the last_training.log
 
