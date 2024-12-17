@@ -4,9 +4,7 @@ import time
 import argparse
 import datetime
 import warnings
-import pdb
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -14,18 +12,15 @@ import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-import torch.autograd.profiler as profiler
 
 
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import accuracy, AverageMeter
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from callbacks import EarlyStopper
 from config import get_config
-from data.build import build_dataset
-from metrics import get_json_stats, get_model_metrics, get_stats, log_metrics, plot_confusion_matrix, dump_summary
+from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
 from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -34,10 +29,6 @@ from logger import create_logger
 from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_helper, reduce_tensor, load_pretained
 from torch.utils.tensorboard import SummaryWriter
 
-#os.environ["NCCL_DEBUG"] = "TRACE"
-#os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
-#os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-#os.environ["VLLM_TRACE_FUNCTION"] = "1"
 
 try:
     # noinspection PyUnresolvedReferences
@@ -140,21 +131,14 @@ def main(config):
     model.metrics = metrics  # This need to be here to avoid problems with distributed training
 
     model = model.cuda()
-    #(device)
-
 
     scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
 
     optimizer = build_optimizer(config, model)
-    #rand_tensor = torch.rand(2,3,384,384)
 
-    #print(rand_tensor)
-    #rand2_tensor = rand_tensor.cuda()
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
     print(torch.cuda.is_available())
 
-    #print(type(rand2_tensor))
-    #print(rand2_tensor)
     model_without_ddp = model.module
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -278,12 +262,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         model.module.total_epoch = config.TRAIN.EPOCHS
     optimizer.zero_grad()
 
-   # rand_tensor = torch.rand(1,2,3,3)
-  #  print(rand_tensor)
-
- #   rand_tensor = rand_tensor.cuda(non_blocking=True)
-#    print(rand_tensor)
-
     num_steps = len(data_loader)
     loss_meter = AverageMeter()
     norm_meter = AverageMeter()
@@ -368,6 +346,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         lr = optimizer.param_groups[0]['lr']
         tb_logger.add_scalar('train/lr', lr, global_step=step)
 
+
 @torch.no_grad()
 def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
     """
@@ -443,9 +422,6 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
     epoch_metric = metric.compute()
 
-
-
-
     if tb_logger is not None:
         step = epoch
         tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
@@ -453,29 +429,20 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
     if config.EVAL_MODE and dist.get_rank() == 0:
 
-
         id_column = 'morphos_id'
         display = 3 # how many entries to display for debug purposes
         classes_df =  pd.read_csv('deploy/taxon_map.csv')
         logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
         class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()[id_column]
-        #class_names = classes_df['morphos_name'].drop_duplicates().reset_index(drop =True)
-        #logger.info(f"First class_names :\n{list(class_names[:display])}")
         stats = get_stats(metric, class_ids, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', config.VERSION, id_column, save_csv=True)
-
         split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
-
         print('split_df' + str(len(split_df)))
         print('stats' + str(len(stats)))
-        #logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
         logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
-        #json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
-        #get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
-        #plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
         dump_summary(epoch_metric, config, dump=True)
 
     metric.reset()  # Do not accumulate over epochs
@@ -551,7 +518,6 @@ if __name__ == '__main__':
     os.makedirs(config.OUTPUT, exist_ok=True)
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
                            local_rank=config.LOCAL_RANK)
-
 
     main(config)
 
