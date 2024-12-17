@@ -120,7 +120,7 @@ def get_json_stats(metrics: MetricCollection, class_ids: List, version:str,id_na
     return result
 
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, id_column, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -131,15 +131,15 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
 
     Returns: Statistics data frame
     """
-    stats_data = _get_stats_from_metrics(metrics,'Total samples')
+    stats_data = _get_stats_from_metrics(metrics,'Total_samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
         db = BugBoxData()
-        stats.assign(model_name=version)
         morhospecies_df = db.get_morhospecies_df()
-        morhospecies_df.set_index('morphos_id', inplace=True)
-        stats = stats.merge(morhospecies_df, left_index=True, right_on='morphos_id')
+        morhospecies_df.set_index(id_column, inplace=True)
+        stats = stats.merge(morhospecies_df, left_index=True, right_on=id_column)
+        stats = stats.assign(model_name=version)
         stats.to_csv(output)
     return stats
 

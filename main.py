@@ -460,23 +460,22 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
         class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()[id_column]
-        class_names = classes_df['morphos_name'].drop_duplicates().reset_index(drop =True)
-
-        logger.info(f"First class_names :\n{list(class_names[:display])}")
-        stats = get_stats(metric, class_ids, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', config.VERSION, save_csv=True)
+        #class_names = classes_df['morphos_name'].drop_duplicates().reset_index(drop =True)
+        #logger.info(f"First class_names :\n{list(class_names[:display])}")
+        stats = get_stats(metric, class_ids, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', config.VERSION, id_column, save_csv=True)
 
         split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
 
         print('split_df' + str(len(split_df)))
         print('stats' + str(len(stats)))
-        logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
+        #logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
         logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
         #json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
         #get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
-        plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
+        #plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
         dump_summary(epoch_metric, config, dump=True)
 
     metric.reset()  # Do not accumulate over epochs
