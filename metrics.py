@@ -11,7 +11,7 @@ from yacs.config import CfgNode
 
 from datetime import datetime
 
-from .dataset_generation.data import BugBoxData
+from dataset_generation.data import BugBoxData
 from utils import save_json
 
 
