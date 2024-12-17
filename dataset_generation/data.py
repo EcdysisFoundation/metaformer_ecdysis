@@ -10,8 +10,8 @@ class BugBoxData:
         Make a dataframe from a csv
         Returns: Panda's DataFrame with the results of the query
         """
-
-        specimen_df = pd.read_csv('dataset_generation/training_selections.csv')
+        # replace path with dataset_generation/training_selections.csv for final edit
+        specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections_1.csv')
         return pd.DataFrame(specimen_df)
 
     def get_reviewed_images_df(self, columns: List[str] = None) -> pd.DataFrame:

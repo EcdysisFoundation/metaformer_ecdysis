@@ -33,18 +33,19 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> dict: 
+def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> dict:
     """
     Get per class statistics
     Args:
         metrics: torchmetrics collection, has to have a `StatScores` metric
         total_column_name: name of the field with the total evaluation sample count
     Returns:
-        dict[str,numpy array] 
+        dict[str,numpy array]
     """
-    
+
     stats = metrics['StatScores']
     tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
+
     #print('tp' + str(tp))
     #print('fp' + str(fp))
     #print('tn' + str(tn))
@@ -66,7 +67,7 @@ def _check_test_count(row):
         return True
     return False
 
-def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_name:str="morphospecie_id",output:Path=None,split_df=None,display=3):
+def get_json_stats(metrics: MetricCollection, class_ids: List, version:str,id_name:str, output:Path=None, split_df=None, display=3):
     """
     Get and save per class statistics in JSON format
     Args:
@@ -82,12 +83,12 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
     pd.set_option('display.max_columns', None)  # show all columns in the head() method
 
     stats_data = {k.lower():v for k,v in _get_stats_from_metrics(metrics,"total_test").items()}
-    
+
     stats = pd.DataFrame(data=stats_data).fillna(0)
     pd.set_option('display.max_rows', 2000)
- 
+
     stats[id_name] =list(class_ids)
-    
+
     # Debug before and after
     logging.debug(f"Before splits merge:\n{stats.head(display)}")
     if split_df is not None:
@@ -99,7 +100,7 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
         stats = split_df.merge(stats,how="left",right_on="morphos_id",left_on="morphos_id")
     logging.debug(f"After splits merge:\n{stats.head(display)}")
 
-    # verify that total_test == test, as as check. 
+    # verify that total_test == test, as as check.
     if stats.apply(lambda row: _check_test_count(row), axis=1).any():
         logging.error("Different test count, see above.")
     else:
@@ -107,9 +108,9 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
 
     stats.rename(columns={"total_samples":"total"},inplace=True)
     # drop total_test column (which is only test), the total we want is train+test+val
-    stats.drop(["total_test","morphos_name","morphos_id"],inplace=True,axis=1,errors='raise') #remove debug columns
+    stats.drop(["total_test","morphos_name"],inplace=True,axis=1,errors='raise') #remove debug columns
 
-    # orient='records' follows the format [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospecie_id":10},...]
+    # orient='records' follows the format [{"precision":0.38,"recall":1,"total":5,"f1":0.56,"morphospeciea_id":10},...]
     # result adds the version field and puts the report inside data
     result = {"version":str(version),"data":stats.to_dict(orient='records')}
     if output:
@@ -118,7 +119,7 @@ def get_json_stats(metrics: MetricCollection, class_ids: List,version:str,id_nam
     return result
 
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -129,10 +130,20 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, s
 
     Returns: Statistics data frame
     """
+    print('metrics')
+    print(metrics)
+    thecount = 0
+    for m in metrics:
+        print(m)
+        thecount += 1
+        if thecount > 100:
+            break
+
     stats_data = _get_stats_from_metrics(metrics,'Total samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
-    
+
     if save_csv:
+        stats.assign(model_name=version)
         # csv = Path(output_dir)/'eval_stats.csv'
         stats.to_csv(output)
 
