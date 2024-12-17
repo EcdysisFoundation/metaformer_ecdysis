@@ -135,8 +135,9 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
+        db = BugBoxData()
         stats.assign(model_name=version)
-        morhospecies_df = BugBoxData.get_morhospecies_df()
+        morhospecies_df = db.get_morhospecies_df()
         morhospecies_df.set_index('morphos_id', inplace=True)
         stats = stats.merge(morhospecies_df, left_index=True, right_on='morphos_id')
         stats.to_csv(output)
