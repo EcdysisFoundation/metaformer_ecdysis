@@ -73,8 +73,8 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
 
     if save_csv:
         db = BugBoxData()
-        morhospecies_df = db.get_morhospecies_df()
-        stats = stats.merge(morhospecies_df, how='inner', left_index=True, right_index=True)
+        morphospecies_df = db.get_morphospecies_df()
+        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
     return stats
@@ -110,7 +110,6 @@ def dump_summary(metrics: MetricCollection, config: CfgNode, dump: bool = False)
         'precision': round(metrics['Precision'].item(), 3),
         'recall': round(metrics['Recall'].item(), 3),
         'f1': round(metrics['F1Score'].item(), 3),
-        # add date
         'date': datetime.now().strftime("%Y-%m-%d")
     }
 

@@ -22,10 +22,10 @@ class BugBoxData:
         taxon_map = self.get_df()
         return taxon_map[['morphos_id', 'morphos_name','specimen_id']]
 
-    def get_morhospecies_df(self):
+    def get_morphospecies_df(self):
         morphospecies = self.get_df()
         morphospecies = morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
-        morphospecies.set_index('morphos_id', inplace=True)
+        morphospecies = morphospecies.set_index('morphos_id')
         return morphospecies
 
 
