@@ -25,7 +25,7 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
     - directory       Directory inside the output/ecdysis directory
     - model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
 
- When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki
+ When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki
 
     conda activate metaformer
 
@@ -33,7 +33,9 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 
     exit
 
-Then one can return later and determine if it still running with the last_training.log
+Then one can return later and determine if it still running with the last_training.log. Once the training is completed, the output, stats, and log should be reviewed to determine if it completed successfully and is suitable to deploy. If so, the following script is used to deploy the model.
+
+    bash deploy/training_deploy.sh morphospecies model_name
 
 
 ### Scripts and modules
@@ -86,11 +88,6 @@ execute
 tensorboard --logdir output/ecdysis/model-name/tensorboard --bind_all
 ```
 then open a browser and go to [](host-or-ip:6006)
-
-
-## Deployment scripts
-
-TBD
 
 ### Torchserve inference and management
 

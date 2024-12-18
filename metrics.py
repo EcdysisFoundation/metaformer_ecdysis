@@ -47,10 +47,6 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     stats = metrics['StatScores']
     tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
 
-    #print('tp' + str(tp))
-    #print('fp' + str(fp))
-    #print('tn' + str(tn))
-    #print('fn' + str(fn))
     return {'TP': tp,
             'FP': fp,
             'TN': tn,
@@ -78,8 +74,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     if save_csv:
         db = BugBoxData()
         morhospecies_df = db.get_morhospecies_df()
-        morhospecies_df.set_index(id_column, inplace=True)
-        stats = stats.merge(morhospecies_df, left_index=True, right_on=id_column)
+        stats = stats.merge(morhospecies_df, how='left', on=id_column)
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
     return stats
