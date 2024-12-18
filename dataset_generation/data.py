@@ -25,6 +25,7 @@ class BugBoxData:
     def get_morphospecies_df(self):
         morphospecies = self.get_df()
         morphospecies = morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
+        morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
         morphospecies = morphospecies.set_index('morphos_id')
         return morphospecies
 

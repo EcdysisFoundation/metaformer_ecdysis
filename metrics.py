@@ -4,8 +4,6 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
-from matplotlib import pyplot as plt
-from sklearn.metrics import ConfusionMatrixDisplay
 from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, ConfusionMatrix, MetricCollection
 from yacs.config import CfgNode
 
