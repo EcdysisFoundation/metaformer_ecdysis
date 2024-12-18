@@ -74,7 +74,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     if save_csv:
         db = BugBoxData()
         morhospecies_df = db.get_morhospecies_df()
-        stats = stats.merge(morhospecies_df, how='inner')
+        stats = stats.merge(morhospecies_df, how='inner', left_index=True, right_index=True)
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
     return stats
