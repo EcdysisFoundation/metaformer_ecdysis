@@ -57,7 +57,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
             total_column_name: tp + fn
            }
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, id_column, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -74,7 +74,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     if save_csv:
         db = BugBoxData()
         morhospecies_df = db.get_morhospecies_df()
-        stats = stats.merge(morhospecies_df, how='left', on=id_column)
+        stats = stats.merge(morhospecies_df, how='inner')
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
     return stats

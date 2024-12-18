@@ -110,7 +110,6 @@ def parse_option():
 
 
 def main(config):
-#    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it.
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
@@ -429,13 +428,12 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
     if config.EVAL_MODE and dist.get_rank() == 0:
 
-        id_column = 'morphos_id'
         display = 3 # how many entries to display for debug purposes
-        classes_df =  pd.read_csv('deploy/taxon_map.csv')
-        logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
+        # classes_df =  pd.read_csv('deploy/taxon_map.csv')
+        # logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()[id_column]
-        stats = get_stats(metric, class_ids, Path(config.OUTPUT)/f'stats.csv', config.VERSION, id_column, save_csv=True)
+        # class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()[id_column]
+        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT)/f'stats.csv', config.VERSION, save_csv=True)
         split_report_path = Path(config.OUTPUT)/f'dataset_report.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
         print('split_df' + str(len(split_df)))
