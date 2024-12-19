@@ -1,16 +1,6 @@
-import logging
 from typing import List
 
 import pandas as pd
-# local imports
-from . import LOGGING_LEVEL, INFO
-
-TAXON_LEVELS = levels = ['order', 'family', 'genus']
-SEED = 42
-LOGGING_LEVEL = INFO
-
-logger = logging.getLogger(__name__)
-logger.setLevel(LOGGING_LEVEL)
 
 
 class BugBoxData:
@@ -18,64 +8,25 @@ class BugBoxData:
     def get_df(self: str):
         """
         Make a dataframe from a csv
-
-
         Returns: Panda's DataFrame with the results of the query
         """
-
-        specimen_df = pd.read_csv('testing_data/data_test3.csv')
-        print(specimen_df.columns.tolist())
-        print(specimen_df['morphos_name'].nunique())
-        print(specimen_df.shape)
-        #specimen_df = specimen_df.groupby(specimen_df['morphos_name']).filter(lambda x: len(x) >= 20).reset_index(drop=True)
-        print(specimen_df['morphos_name'].nunique())
-        print(specimen_df.shape)
+        # replace path with dataset_generation/training_selections.csv for final edit
+        specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections_1.csv')
         return pd.DataFrame(specimen_df)
 
-    def get_reviewed_images_df(self, columns: List[str] = None) -> pd.DataFrame:
-        """
-        Get table of reviewed images
-
-        Args:
-            columns: Subset of columns
-            lookback: Interval to query for new images; could be day, week, month, year. If None, it does not perform
-            filtering by date
-
-        Returns: Pandas DataFrame
-        """
-
+    def get_reviewed_images_df(self):
         reviewed_images = self.get_df()
-#        print(reviewed_images)
-        reviewed_images = reviewed_images[['morphos_name','morphos_id','specimen_id','uuid','image', 'specimen_count']]
+        return reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
 
-        if columns is not None:
-            reviewed_images = reviewed_images[columns]
+    def get_taxon_map_df(self):
+        taxon_map = self.get_df()
+        return taxon_map[['morphos_id', 'morphos_name','specimen_id']]
 
-        return reviewed_images
-
-
-    def get_morphospecies_df(self, columns: List[str] = None):
-        """
-        Get table of morphospecies ids
-
-        Args:
-            columns: Subset of columns
-
-        Returns: Pandas DataFrame
-        """
-
+    def get_morphospecies_df(self):
         morphospecies = self.get_df()
-        
-        if columns is not None:
-            morphospecies = morphospecies[columns]
-
+        morphospecies = morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
+        morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
+        morphospecies = morphospecies.set_index('morphos_id')
         return morphospecies
 
-
-if __name__ == '__main__':
-    df = BugBoxData()
-
-    images = df.get_reviewed_images_df(columns=[['image', 'morphos_id']], lookback='week')
-
-    print(images.head())
 

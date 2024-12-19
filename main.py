@@ -4,9 +4,7 @@ import time
 import argparse
 import datetime
 import warnings
-import pdb
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -14,18 +12,15 @@ import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-import torch.autograd.profiler as profiler
 
 
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import accuracy, AverageMeter
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from callbacks import EarlyStopper
 from config import get_config
-from data.build import build_dataset
-from metrics import get_json_stats, get_model_metrics, get_stats, log_metrics, plot_confusion_matrix, dump_summary
+from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
 from models import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -34,10 +29,6 @@ from logger import create_logger
 from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_helper, reduce_tensor, load_pretained
 from torch.utils.tensorboard import SummaryWriter
 
-#os.environ["NCCL_DEBUG"] = "TRACE"
-#os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
-#os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-#os.environ["VLLM_TRACE_FUNCTION"] = "1"
 
 try:
     # noinspection PyUnresolvedReferences
@@ -75,15 +66,15 @@ def parse_option():
     parser.add_argument('--tag', help='tag of experiment')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--throughput', action='store_true', help='Test throughput only')
-    
-    parser.add_argument('--num-workers', type=int, 
+
+    parser.add_argument('--num-workers', type=int,
                         help="num of workers on dataloader ")
-    
+
     parser.add_argument('--lr', type=float, metavar='LR',
                         help='learning rate')
     parser.add_argument('--weight-decay', type=float,
                         help='weight decay (default: 0.05 for adamw)')
-    
+
     parser.add_argument('--min-lr', type=float,
                         help='learning rate')
     parser.add_argument('--warmup-lr', type=float,
@@ -94,15 +85,15 @@ def parse_option():
                         help="epochs")
 
     parser.add_argument('--sampler', type=str, default=None, choices=('weighted',), help='Type of training sampler')
-    
+
     parser.add_argument('--dataset', type=str,
                         help='dataset', default='bugbox')
     parser.add_argument('--lr-scheduler-name', type=str,
                         help='lr scheduler name,cosin linear,step')
-    
+
     parser.add_argument('--pretrain', type=str,
                         help='pretrain')
-    
+
     parser.add_argument('--version', type=str, help='Version to tag trained model')
 
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
@@ -119,8 +110,7 @@ def parse_option():
 
 
 def main(config):
-#    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it. 
+    torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it.
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -135,43 +125,36 @@ def main(config):
     device = torch.device("cuda")
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
-    
+
     metrics = get_model_metrics(config)
     model.metrics = metrics  # This need to be here to avoid problems with distributed training
 
     model = model.cuda()
-    #(device)
-    
 
     scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
 
     optimizer = build_optimizer(config, model)
-    #rand_tensor = torch.rand(2,3,384,384)
-    
-    #print(rand_tensor)
-    #rand2_tensor = rand_tensor.cuda()
+
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
     print(torch.cuda.is_available())
-    
-    #print(type(rand2_tensor))
-    #print(rand2_tensor)
+
     model_without_ddp = model.module
-        
+
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        
+
     logger.info(f"Number of trainable parameters: {n_parameters}")
-    
+
 
     if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
         #breakpoint()
         validate(config, data_loader_test, model, 0, metrics)
         return
-    
+
     if hasattr(model_without_ddp, 'flops'):
         flops = model_without_ddp.flops()
         logger.info(f"Number of GFLOPs: {flops / 1e9}")
-    
+
     lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
     if config.AUG.MIXUP > 0.:
         # smoothing is handled with mixup label transform
@@ -180,7 +163,7 @@ def main(config):
         criterion = LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
     else:
         criterion = torch.nn.CrossEntropyLoss()
-    
+
     if config.TRAIN.AUTO_RESUME:
         resume_file = auto_resume_helper(config.OUTPUT)
         if resume_file:
@@ -192,7 +175,7 @@ def main(config):
             logger.info(f'auto resuming from {resume_file}')
         else:
             logger.info(f'no checkpoint found in {config.OUTPUT}, ignoring auto resume')
-    
+
     max_accuracy = 0.0
     if config.MODEL.RESUME:
         logger.info(f"**********normal test***********")
@@ -216,13 +199,13 @@ def main(config):
     writer = SummaryWriter(log_dir=tb_dir)
     # Early stopping
     stopper = EarlyStopper(patience=config.TRAIN.EARLY_STOP.PATIENCE, min_delta=config.TRAIN.EARLY_STOP.MIN_DELTA)
-    #breakpoint() 
+    #breakpoint()
     start_time = time.time()
     with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1,
               unit='epoch', initial=config.TRAIN.START_EPOCH) as pbar:
         for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
             # Train
-            
+
             data_loader_train.sampler.set_epoch(epoch)
             train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
                                        lr_scheduler, scaler, writer)
@@ -278,12 +261,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         model.module.total_epoch = config.TRAIN.EPOCHS
     optimizer.zero_grad()
 
-   # rand_tensor = torch.rand(1,2,3,3)
-  #  print(rand_tensor)
-
- #   rand_tensor = rand_tensor.cuda(non_blocking=True)
-#    print(rand_tensor)
-
     num_steps = len(data_loader)
     loss_meter = AverageMeter()
     norm_meter = AverageMeter()
@@ -297,7 +274,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
             if idx == 0:
                 start_time = time.time()
-   
+
             elif idx == 1:
                 print(f"Time to load a single batch: {time.time() - start_time} seconds")
             if config.DATA.ADD_META:
@@ -307,19 +284,19 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
                 meta = meta.cuda(non_blocking=True)
             else:
                 samples, targets= data
-                meta = None 
+                meta = None
             samples = samples.cuda(non_blocking=True)
             targets = targets.cuda(non_blocking=True)
-            
+
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
-            
+
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=config.USE_AMP):
                 if config.DATA.ADD_META:
 
                     outputs = model(samples, meta)
                 else:
-                    outputs = model(samples)                    
+                    outputs = model(samples)
                 loss = criterion(outputs, targets)
             print('arrived at config.train_accumulation')
             if config.TRAIN.ACCUMULATION_STEPS > 1:
@@ -368,6 +345,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
         lr = optimizer.param_groups[0]['lr']
         tb_logger.add_scalar('train/lr', lr, global_step=step)
 
+
 @torch.no_grad()
 def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
     """
@@ -413,7 +391,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
             images = images.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
-            
+
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 if config.DATA.ADD_META:
                     output = model(images, meta)
@@ -423,7 +401,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 # measure accuracy and record loss
                 loss = criterion(output, target)
                 acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
-                
+
                 metric.update(output, target)
 
                 acc1 = reduce_tensor(acc1)
@@ -442,9 +420,6 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
     epoch_metric = metric.compute()
-    
-    
-    
 
     if tb_logger is not None:
         step = epoch
@@ -452,32 +427,17 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
         tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
 
     if config.EVAL_MODE and dist.get_rank() == 0:
-        
 
-        id_column = 'morphos_id'
         display = 3 # how many entries to display for debug purposes
-        classes_df =  pd.read_csv('deploy/taxon_map.csv')
-        logger.info(f"Columns and first entries from taxon map are:\n{classes_df.head(display)}")
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        class_ids = classes_df.loc[map(int, config.DATA.CLASS_NAMES)].reset_index()["morphos_id"]
-           
-        class_names = classes_df['morphos_name'].drop_duplicates().reset_index(drop =True)
-        
-        logger.info(f"First class_names :\n{list(class_names[:display])}")
-        stats = get_stats(metric, class_names, Path(config.OUTPUT)/f'stats_{config.VERSION}.csv', save_csv=True)
-
-        split_report_path = Path(config.OUTPUT)/f'dataset_report_{config.VERSION}.csv'
+        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT)/f'stats.csv', config.VERSION, save_csv=True)
+        split_report_path = Path(config.OUTPUT)/f'dataset_report.csv'
         split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
-
         print('split_df' + str(len(split_df)))
         print('stats' + str(len(stats)))
-        logging.info(f"Length of class ids: {len(class_ids)}, names: {len(class_names)}.")
         logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
-        json_out_path = Path(config.OUTPUT)/f'stats_{config.VERSION}.json'
-        get_json_stats(metric, class_ids,config.VERSION,id_name=id_column,split_df=split_df,output=json_out_path)
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
-        plot_confusion_matrix(metric, class_names, Path(config.OUTPUT)/f'cmatrix_{config.VERSION}.png', save=True)
         dump_summary(epoch_metric, config, dump=True)
 
     metric.reset()  # Do not accumulate over epochs
@@ -554,7 +514,6 @@ if __name__ == '__main__':
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
                            local_rank=config.LOCAL_RANK)
 
-    
     main(config)
 
     if dist.get_rank() == 0 and not config.EVAL_MODE:

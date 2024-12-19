@@ -15,7 +15,7 @@ SAVE_FREQ: 1000  # only save_csv best and last checkpoints
 USE_AMP: True
 TRAIN:
   USE_CHECKPOINT: True  # Mandatory for handling batches of 4 images
-  EPOCHS: 200 # This takes about 20 minutes
+  EPOCHS: 1 # This takes a few hours
   BASE_LR: 16e-4
   MIN_LR: 16e-6
   WARMUP_EPOCHS: 1

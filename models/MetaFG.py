@@ -5,8 +5,8 @@ from timm.models.helpers import load_pretrained
 from timm.models.registry import register_model
 from timm.models.layers import trunc_normal_
 
-from .MBConv import MBConvBlock
-from .MHSA import MHSABlock, Mlp
+from MBConv import MBConvBlock
+from MHSA import MHSABlock, Mlp
 
 
 def _cfg(url='', **kwargs):
@@ -44,7 +44,7 @@ def make_blocks(stage_index,depths,embed_dims,img_size,dpr,extra_token_num=1,num
         else:
             raise NotImplementedError("We only support conv and mhsa")
     return blocks
-    
+
 
 class MetaFG(nn.Module):
     def __init__(self,img_size=224,in_chans=3, num_classes=1000,
@@ -80,12 +80,12 @@ class MetaFG(nn.Module):
         #stage_2
         self.stage_2 = nn.ModuleList(make_blocks(2,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//4,
                                       dpr=dpr,num_heads=num_heads,extra_token_num=extra_token_num,mlp_ratio=mlp_ratio,stage_type='conv'))
-        
+
         #stage_3
         self.cls_token_1 = nn.Parameter(torch.zeros(1, 1, attn_embed_dims[0]))
         self.stage_3 = nn.ModuleList(make_blocks(3,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//8,
                                       dpr=dpr,num_heads=num_heads,extra_token_num=extra_token_num,mlp_ratio=mlp_ratio,stage_type='mhsa'))
-        
+
         #stage_4
         self.cls_token_2 = nn.Parameter(torch.zeros(1, 1, attn_embed_dims[1]))
         self.stage_4 = nn.ModuleList(make_blocks(4,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//16,
@@ -98,10 +98,10 @@ class MetaFG(nn.Module):
             self.aggregate = torch.nn.Conv1d(in_channels=2, out_channels=1, kernel_size=1)
             self.norm_1 = attn_norm_layer(attn_embed_dims[0])
             self.norm = attn_norm_layer(attn_embed_dims[1])
-            
+
         # Classifier head
         self.head = nn.Linear(attn_embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
-        
+
         trunc_normal_(self.cls_token_1, std=.02)
         trunc_normal_(self.cls_token_2, std=.02)
         self.apply(self._init_weights)
@@ -123,7 +123,7 @@ class MetaFG(nn.Module):
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
-    
+
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'cls_token_1','cls_token_2'}
@@ -174,11 +174,11 @@ class MetaFG(nn.Module):
         else:
             cls = cls_2.squeeze(dim=1)
         return cls
-            
+
     def forward(self, x,meta=None):
         x = self.forward_features(x,meta)
         x = self.head(x)
-        return x 
+        return x
 @register_model
 def MetaFG_0(pretrained=False, **kwargs):
     model = MetaFG(conv_embed_dims = [64,96,192],attn_embed_dims=[384,768],
