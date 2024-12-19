@@ -108,7 +108,8 @@ class MetaformerHandler(VisionHandler):
         for confidences, indices in zip(probabilities.tolist(), class_indices.tolist()):
             primary_confidence, primary_class_index = confidences[0], indices[0]
 
-            # taxonid depricated. Currently it is returning the first specimen_id for the class from the taxon_map
+            # taxonid depricated. Currently it is returning the first specimen_id for the class from the taxon_map.csv
+            # instead of taxon_map.csv, a smaller, 2 column file created, similar to stats.csv.
             if primary_confidence >= minimum_confidence:
                 labels = class_names[primary_class_index]  # Map index to id
                 morphospecies, taxonid = self.mapping.get(labels, 0)  # Map id to GBIF taxon id and morphospecies name
