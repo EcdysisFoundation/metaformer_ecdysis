@@ -79,7 +79,7 @@ class MetaformerHandler(VisionHandler):
         """
         Generate response dictionary. The response follows BugBox's required format, i.e.:
 
-        [{ "taxonid": 5108951,
+        [{
           "confidence": "99.92",
           "morphospecies_id": 3458,
           "name": "Diphthera festiva",
@@ -108,6 +108,7 @@ class MetaformerHandler(VisionHandler):
         for confidences, indices in zip(probabilities.tolist(), class_indices.tolist()):
             primary_confidence, primary_class_index = confidences[0], indices[0]
 
+            # taxonid depricated. Currently it is returning the first specimen_id for the class from the taxon_map
             if primary_confidence >= minimum_confidence:
                 labels = class_names[primary_class_index]  # Map index to id
                 morphospecies, taxonid = self.mapping.get(labels, 0)  # Map id to GBIF taxon id and morphospecies name
@@ -116,8 +117,7 @@ class MetaformerHandler(VisionHandler):
                 morphospecies = 'incertae sedis'
                 taxonid = 0
 
-            response = {'taxonid': int(taxonid),
-                        'confidence': round(primary_confidence*100, 2),  # Convert to percentage
+            response = {'confidence': round(primary_confidence*100, 2),  # Convert to percentage
                         'morphospecies_id': int(labels),
                         'name': morphospecies,
                         'optional_preds': [],
