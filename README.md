@@ -57,7 +57,13 @@ Deployment start with reviewing the trianing output. Move files to the share dri
 
     scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/training_results.csv /pool1/smb/metaformer-stats/MODEL_NAME/training_results.csv
 
-Once review is completed, run the torch-model-archiver on Ecdysis02, in the conda environment, 'metaformer'. Note: this will overwrite deploy/model-store/metaformer.mar. See the Archive and Revert process below to first save a backup of this file.
+Once review is completed, run the torch-model-archiver on Ecdysis02, in the conda environment, 'metaformer'. Note: this will overwrite deploy/model-store/metaformer.mar.
+
+Save a copy of metaformer.mar in case we need to revert, (see Archive and Revert)
+
+    cp model_store/metaformer.mar output/ecdysis/morphospecies/metaformer_MODEL_NAME.mar
+
+Activate environment and run torch-model-archiver.
 
     conda activate metaformer
 
