@@ -1,4 +1,4 @@
-from .MetaFG import MetaFG_2
+from MetaFG import MetaFG_2
 
 
 def build_model(config):
