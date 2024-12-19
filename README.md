@@ -28,27 +28,78 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 ```commandline
     conda activate metaformer
 
-    bash deploy/training.sh "directory" "model_name"
+    bash deploy/training.sh "DIRECTORY" "MODEL_NAME"
 ```
    *positional arguments*:
 
-    - directory       Directory inside the output/ecdysis directory
-    - model_name      Name of the model, will be a directory inside output/ecdysis/test_directory/
+    - DIRECTORY       Directory inside the output/ecdysis directory. Usually 'morphospecies'.
+    - MODEL_NAME      Name of the model, will be a directory inside output/ecdysis/test_directory/
 
- When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki
+ When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background with `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki. In the example below, MODEL_NAME == modelVersion in the inference response. The current protocol is to use text based integer version sequence, starting with 1, 2, 3, 4, ... Past versioning used 1.20, 1.21, 1,22, ending with 1.22.
 
     conda activate metaformer
 
-    bash deploy/training.sh morphospecies model_name > output/ecdysis/morphospecies/last_training.log 2>&1 &
+    bash deploy/training.sh morphospecies MODEL_NAME > output/ecdysis/morphospecies/last_training.log 2>&1 &
 
     exit
 
-Then one can return later and determine if it still running with the last_training.log. Once the training is completed, the output, stats, and log should be reviewed to determine if it completed successfully and is suitable to deploy. If so, the following script is used to deploy the model.
+Then one can return later and determine if it still running with the last_training.log. Once the training is completed, the output, stats, and log should be reviewed to determine if it completed successfully and is suitable to deploy.
 
-    bash deploy/training_deploy.sh morphospecies model_name
+## Deployment
+
+Deployment start with reviewing the trianing output. Move files to the share drive for review. This assumes DIRECTORY == 'morphospecies'. On Ecdysis01, with the new MODEL_NAME ..
+
+    mkdir /pool1/smb/metaformer-stats/MODEL_NAME
+
+    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/stats.csv /pool1/smb/metaformer-stats/MODEL_NAME/stats.csv
+
+    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/dataset_report.csv /pool1/smb/metaformer-stats/MODEL_NAME/dataset_report.csv
+
+    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/training_results.csv /pool1/smb/metaformer-stats/MODEL_NAME/training_results.csv
+
+Once review is completed, run the torch-model-archiver on Ecdysis02, in the conda environment, 'metaformer'. Note: this will overwrite deploy/model-store/metaformer.mar. See the Archive and Revert process below to first save a backup of this file.
+
+    conda activate metaformer
+
+    torch-model-archiver --model-name "metaformer" --version "MODEL_NAME" --model-file "models/MetaFG.py" --serialized-file "output/ecdysis/morphospecies/MODEL_NAME/best.pth" --handler "deploy/handler.py" --export-path "deploy/model_store/" --requirements-file "deploy/requirements.txt" --extra-files "config.py,output/ecdysis/morphospecies/MODEL_NAME/config.yaml,models/,deploy/inference.py,deploy/taxon_map.csv" --force
+
+If completed successfully, download this file from Ecdysis01, overwriting the copy of it there.
+
+    scp ecdysis@ecdysis02.local:~/MetaFormer/deploy/model_store/metaformer.mar /pool1/model-store-2/metaformer.mar
+
+Once the new model is served through Torchserve (see below), we update the model statistics in the BugBox database. We will need to stats.csv file to do that, so download it as well to insert with the appropriate django management command.
+
+    scp ecdysis@ecdysis02.local:~/MetaFormer/deploy/model_store/metaformer.mar /pool1/model-store-2/metaformer.mar
+
+### Archive and Revert
+
+The metaformer.mar file should be saved before overwriting to be able to easily revert to a previous model if necessary. Formerly, only the model output and model dataset files were saved. To recreate the .mar file could be incumbered by loss of taxon_map.csv which gets overwritten, and other changes in the codebase. Both can be saved for some time, then deleted as we need space to be recovered. Here is some info about doing that.
+
+On Ecdysis02 in MetaFormer/output/ecdysis/morphospecies, gzip old model version output folders.
+
+    tar --remove-files -zcvf model_folder.tar.gz MODEL_NAME
+
+Copy metaformer.mar files before overwriting them.
+
+    cp model_store/metaformer.mar output/ecdysis/morphospecies/metaformer_MODEL_NAME.mar
+
+In datasets, ls files and delete some older ones with `rm -r FILENAME`. The same can be done in output/ecdysis/morphospecies, but these are higher priority than the files in datasets. Some stats to inform these decisions are found by below.
+
+Get total directory size of MetaFormer dir,
+
+    du -sh MetaFormer
+
+Get total disk usage, including mount drive
+
+    df -H
+
+### Torchserve inference and management
+
+Once all the metaformer.mar file is generated and moved to model-store-2 on Ecdysis01 as described above, the process can be continued using instructions on the servemetaformer repo. The model are deployed using [Torchserve](https://pytorch.org/serve/). see https://github.com/EcdysisFoundation/servemetaformer
 
 
-### Scripts and modules
+## Scripts and modules
+
 #### `dataset_generation/data.py`
 Make a Pandas dataframe from the csv file generated from BugBox's database.
 
@@ -74,8 +125,6 @@ root/
      └── Oscinella
 ```
 
-
-
 ### Tensorboard
 
 Training and validation metrics are saved to tensorboard by default. To run the Tensorboard server on a particular model
@@ -84,7 +133,3 @@ execute
 tensorboard --logdir output/ecdysis/model-name/tensorboard --bind_all
 ```
 then open a browser and go to [](host-or-ip:6006)
-
-### Torchserve inference and management
-
-The model are deployed using [Torchserve](https://pytorch.org/serve/). see https://github.com/EcdysisFoundation/servemetaformer
