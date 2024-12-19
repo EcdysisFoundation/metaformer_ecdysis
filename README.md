@@ -10,6 +10,16 @@ At present the metaformer-amp environment contains package versions that do not 
 
 Image selection CSV files are generated on Ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/...`. Production images are uploaded to AWS S3, while training images are accessed on the Ecdysis01 hardrive. Therefore, new images on AWS S3 need to be synced to Ecdysis01 before training begins. This sync process should be scheduled through BugBox's Celery Beat schedule. Before training a new model, ensure the desired training selections are generated from the BugBox managment command and AWS S3 images are synced after the trainging selections .csv file has been generated.
 
+### Symlink image files
+
+The images are accessed through symlinks created during dataset generation. The drive location on Ecdysis01 needs to be mapped for this to work. This was done with the following command.
+
+`sudo sshfs ecdysis@ecdysis01.local:/pool1/srv/bugbox3/bugbox3/media/ /pool1/srv/bugbox3/bugbox3/media/ -o ro`
+
+Can check if the entry still exists by viewing `proc/self/mounts` as seen below, or viewing the drive usage stats with `df -H`.
+
+`ecdysis@ecdysis01.local:/pool1/srv/bugbox3/bugbox3/media/ /pool1/srv/bugbox3/bugbox3/media fuse.sshfs rw,nosuid,nodev,relatime,user_id=0,group_id=0,allow_other 0 0`
+
 ## Training
 
 Currently training is done with ... `deploy/training.sh`. This uses the training selections file to structure images and files for model traning (see `dataset_generation`), starts the training, and runs some analytics at the end. It does not deploy to the trained model to the server. Output should be reviewed before deploying the newly trained model.
@@ -42,20 +52,6 @@ Then one can return later and determine if it still running with the last_traini
 #### `dataset_generation/data.py`
 Make a Pandas dataframe from the csv file generated from BugBox's database.
 
-#### `dataset_generation/generate_tree.py` DEPRICATED?
-
-Generates directory structure for classified insect pictures, where every taxon level is represented by a subdirectory.
-For example:
-```
-root/
-└── Thysanoptera
-    └── Aeolothripidae
-        ├── 82773c1e-f540-4f75-9a31-f0e768225cb9_3309.jpg
-        ├── 891fbd4a-21fe-406d-a5aa-d80000103141_5578.jpg
-        ├── 979f8f3d-5198-4c4f-b424-77bab7d347c5_533.jpg
-        └── Aeolothrips
-            └── fe7c2bc2-4a66-4826-adf3-bd14c4547229_6739.jpg
-```
 
 #### `split.py`
 
