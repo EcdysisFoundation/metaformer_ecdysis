@@ -9,7 +9,7 @@ from yacs.config import CfgNode
 
 from datetime import datetime
 
-from dataset_generation.data import BugBoxData
+from dataset_generation.data import BugBoxData, MORPHOS_ID
 from utils import save_json
 
 
@@ -72,12 +72,12 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, d
     if save_csv:
         db = BugBoxData()
         morphospecies_df = db.get_morphospecies_df()
-        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_on='morphos_id')
+        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_on=MORPHOS_ID)
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
         dataset_report_ = 'dataset_report_'
         dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
-        dataset_report_morphos_id = dataset_report_ + 'morphos_id'
+        dataset_report_morphos_id = dataset_report_ + MORPHOS_ID
         stats.merge(dataset_report_df, how='left', left_index=True, right_on=dataset_report_morphos_id)
     return stats
 
