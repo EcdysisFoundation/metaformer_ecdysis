@@ -55,7 +55,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
             total_column_name: tp + fn
            }
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, dataset_report_df, version: str, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -77,6 +77,11 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, d
         stats_csv = 'stats.csv'
         stats.to_csv(output / stats_csv)
         dataset_report_ = 'dataset_report_'
+        dataset_report_path = output/f'dataset_report.csv'
+        dataset_report_df = pd.read_csv(dataset_report_path) if dataset_report_path.exists() else None
+        dataset_report_df.morphos_id = dataset_report_df.morphos_id.astype('str')
+        print('dataset_report_df: ' + str(len(dataset_report_df)))
+        logging.info(f"Length of dataset_report: {len(dataset_report_df)}, stats: {len(stats)}")
         dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
         dataset_report_morphos_id = dataset_report_ + MORPHOS_ID
         stats = stats.merge(dataset_report_df, how='left', left_index=True, right_on=dataset_report_morphos_id)
