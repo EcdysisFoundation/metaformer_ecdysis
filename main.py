@@ -430,12 +430,12 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
         display = 3 # how many entries to display for debug purposes
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT)/f'stats.csv', config.VERSION, save_csv=True)
-        split_report_path = Path(config.OUTPUT)/f'dataset_report.csv'
-        split_df = pd.read_csv(split_report_path) if split_report_path.exists() else None
-        print('split_df' + str(len(split_df)))
+        dataset_report_path = Path(config.OUTPUT)/f'dataset_report.csv'
+        dataset_report_df = pd.read_csv(dataset_report_path) if dataset_report_path.exists() else None
+        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT)/f'stats.csv', config.VERSION, dataset_report_df, save_csv=True)
+        print('split_df' + str(len(dataset_report_df)))
         print('stats' + str(len(stats)))
-        logging.info(f"Length of split report : {len(split_df)}, stats: {len(stats)}")
+        logging.info(f"Length of dataset_report: {len(dataset_report_df)}, stats: {len(stats)}")
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
         dump_summary(epoch_metric, config, dump=True)

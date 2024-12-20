@@ -55,7 +55,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
             total_column_name: tp + fn
            }
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
+def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, dataset_report_df, version: str, save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -75,6 +75,10 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
         stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
+        dataset_report_ = 'dataset_report_'
+        dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
+        dataset_report_morphos_id = dataset_report_ + 'morphos_id'
+        stats.merge(dataset_report_df, how='left', left_index=True, right_on=dataset_report_morphos_id)
     return stats
 
 

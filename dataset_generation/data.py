@@ -18,12 +18,9 @@ class BugBoxData:
         reviewed_images = self.get_df()
         return reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
 
-    def get_taxon_map_df(self):
-        taxon_map = self.get_df()
-        return taxon_map[['morphos_id', 'morphos_name','specimen_id']]
-
     def get_morphospecies_df(self):
         morphospecies = self.get_df()
+        # warning, code expects this order of ['morphos_id', 'morphos_name'].
         morphospecies = morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
         morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
         morphospecies = morphospecies.set_index('morphos_id')

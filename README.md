@@ -67,7 +67,7 @@ Activate environment and run torch-model-archiver.
 
     conda activate metaformer
 
-    torch-model-archiver --model-name "metaformer" --version "MODEL_NAME" --model-file "models/MetaFG.py" --serialized-file "output/ecdysis/morphospecies/MODEL_NAME/best.pth" --handler "deploy/handler.py" --export-path "deploy/model_store/" --requirements-file "deploy/requirements.txt" --extra-files "config.py,output/ecdysis/morphospecies/MODEL_NAME/config.yaml,models/,deploy/inference.py,deploy/taxon_map.csv" --force
+    torch-model-archiver --model-name "metaformer" --version "MODEL_NAME" --model-file "models/MetaFG.py" --serialized-file "output/ecdysis/morphospecies/MODEL_NAME/best.pth" --handler "deploy/handler.py" --export-path "deploy/model_store/" --requirements-file "deploy/requirements.txt" --extra-files "config.py,output/ecdysis/morphospecies/MODEL_NAME/config.yaml,models/,deploy/inference.py,deploy/morphospecies_map.csv" --force
 
 If completed successfully, download this file from Ecdysis01, overwriting the copy of it there.
 
@@ -79,7 +79,7 @@ Once the new model is served through Torchserve (see below), we update the model
 
 ### Archive and Revert
 
-The metaformer.mar file should be saved before overwriting to be able to easily revert to a previous model if necessary. Formerly, only the model output and model dataset files were saved. To recreate the .mar file could be incumbered by loss of taxon_map.csv which gets overwritten, and other changes in the codebase. Both can be saved for some time, then deleted as we need space to be recovered. Here is some info about doing that.
+The metaformer.mar file should be saved before overwriting to be able to easily revert to a previous model if necessary. Formerly, only the model output and model dataset files were saved. To recreate a .mar file to revert a deployment could be incumbered by changes in the codebase. Both can be saved for some time, then deleted as we need space to be recovered. More storage is available on Ecdysis01 as well. Here is more info about doing archiving previous models and managing space.
 
 On Ecdysis02 in MetaFormer/output/ecdysis/morphospecies, gzip old model version output folders.
 
