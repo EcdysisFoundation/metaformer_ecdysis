@@ -25,6 +25,8 @@ class BugBoxData:
         # warning, code expects this order of ['morphos_id', 'morphos_name'].
         morphospecies = morphospecies[[MORPHOS_ID, MORPHOS_NAME]].drop_duplicates()
         morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
+        morphospecies.reset_index(drop=True)
+        morphospecies = morphospecies.set_index('morphos_id')
         return morphospecies
 
 
