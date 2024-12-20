@@ -84,7 +84,8 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
         logging.info(f"Length of dataset_report: {len(dataset_report_df)}, stats: {len(stats)}")
         dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
         dataset_report_morphos_id = dataset_report_ + MORPHOS_ID
-        stats = stats.merge(dataset_report_df, how='left', left_index=True, right_on=dataset_report_morphos_id)
+        dataset_report_df = dataset_report_df.set_index(dataset_report_morphos_id)
+        stats = stats.merge(dataset_report_df, how='left', left_index=True, right_index=True)
         v = dataset_report_ + stats_csv
         stats.to_csv(output / v)
     return stats
