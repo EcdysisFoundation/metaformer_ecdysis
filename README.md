@@ -73,9 +73,9 @@ If completed successfully, download this file from Ecdysis01, overwriting the co
 
     scp ecdysis@ecdysis02.local:~/MetaFormer/deploy/model_store/metaformer.mar /pool1/model-store-2/metaformer.mar
 
-Once the new model is served through Torchserve (see below), we update the model statistics in the BugBox database. We will need to stats.csv file to do that, so download it as well to insert with the appropriate django management command.
+Once the new model is served through Torchserve (see below), we update the model statistics in the BugBox database. We will need the dataset_report_stats.csv file to do that, which is dataset_report.csv and stats.csv combined. So download it as well to insert with the appropriate django management command.
 
-    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/stats.csv /pool1/srv/bugbox3/local_files/stats.csv
+    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/dataset_report_stats.csv /pool1/srv/bugbox3/local_files/dataset_report_stats.csv
 
 ### Archive and Revert
 
