@@ -72,7 +72,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, d
     if save_csv:
         db = BugBoxData()
         morphospecies_df = db.get_morphospecies_df()
-        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
+        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_on='morphos_id')
         stats = stats.assign(model_name=version)
         stats.to_csv(output)
         dataset_report_ = 'dataset_report_'
