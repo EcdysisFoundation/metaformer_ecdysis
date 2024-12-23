@@ -23,7 +23,7 @@ DATASET="bugbox_model_${THIS_VERSION}"
 
 # data.py may be pointing to the test .csv instead.
 echo "Download latest training_selections file."
-cp /pool1/srv/bugbox3/local_files/training_selections.csv ./dataset_generation/training_selections.csv || exit 11
+scp ecdysis@ecdysis01.local:/pool1/srv/bugbox3/local_files/training_selections.csv ./dataset_generation/training_selections.csv || exit 11
 wait
 
 python -m dataset_generation "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
