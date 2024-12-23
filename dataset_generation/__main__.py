@@ -59,7 +59,7 @@ def main():
     morphospecies_map.to_csv('deploy/morphospecies_map.csv') # here too for deployment .mar
 
     report_count_df = generate_split_class_report(splits, morphospecies_map)
-    report_count_df.to_csv(dataset_dir + '/dataset_report.csv', index=False)
+    report_count_df.to_csv(dataset_dir / 'dataset_report.csv', index=False)
 
 # This gets executed when running `python -m dataset_generation`
 if __name__ == '__main__':
