@@ -8,8 +8,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from .utils import save_yaml_file
-
-from data import MORPHOS_ID, MORPHOS_NAME
+from .data import MORPHOS_ID, MORPHOS_NAME
 from . import LOGGING_LEVEL, INFO
 
 from tqdm import tqdm
