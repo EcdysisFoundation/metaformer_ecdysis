@@ -244,9 +244,7 @@ def generate_split_class_report(splits, morphospecies_map:pd.DataFrame):
     """
     counts_df = get_count_per_class_split(splits)
 
-    counts_df[MORPHOS_ID] = counts_df[MORPHOS_ID].astype(int)
-
-    counts_df = morphospecies_map[[MORPHOS_ID, MORPHOS_NAME]].merge(counts_df, on=MORPHOS_ID, how='right')
+    counts_df = counts_df.merge(morphospecies_map, left_on=MORPHOS_ID, right_index=True, how='left')
     counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
 
     return counts_df.sort_values(by=MORPHOS_NAME)

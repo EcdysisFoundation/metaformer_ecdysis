@@ -26,7 +26,7 @@ class BugBoxData:
         morphospecies = morphospecies[[MORPHOS_ID, MORPHOS_NAME]].drop_duplicates()
         morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
         morphospecies.reset_index(drop=True)
-        morphospecies = morphospecies.set_index('morphos_id')
+        morphospecies = morphospecies.set_index(MORPHOS_ID)
         return morphospecies
 
 
