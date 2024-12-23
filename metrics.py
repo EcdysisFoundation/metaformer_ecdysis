@@ -10,7 +10,6 @@ from yacs.config import CfgNode
 from datetime import datetime
 
 from dataset_generation.data import BugBoxData, MORPHOS_ID
-from utils import save_json
 
 
 def get_model_metrics(config: CfgNode):

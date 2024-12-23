@@ -13,7 +13,7 @@ class BugBoxData:
         Returns: Panda's DataFrame with the results of the query
         """
         # replace path with dataset_generation/training_selections.csv for final edit
-        specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections_1.csv')
+        specimen_df = pd.read_csv('dataset_generation/training_selections_tests/training_selections_3.csv')
         return pd.DataFrame(specimen_df)
 
     def get_reviewed_images_df(self):
@@ -26,7 +26,7 @@ class BugBoxData:
         morphospecies = morphospecies[[MORPHOS_ID, MORPHOS_NAME]].drop_duplicates()
         morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
         morphospecies.reset_index(drop=True)
-        morphospecies = morphospecies.set_index('morphos_id')
+        morphospecies = morphospecies.set_index(MORPHOS_ID)
         return morphospecies
 
 
