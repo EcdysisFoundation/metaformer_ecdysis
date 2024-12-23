@@ -55,7 +55,7 @@ def main():
     images.to_csv(meta_file, index=False)
 
     morphospecies_map = db.get_morphospecies_df()
-    morphospecies_map.to_csv(dataset_dir + '/morphospecies_map.csv')
+    morphospecies_map.to_csv(dataset_dir / 'morphospecies_map.csv')
     morphospecies_map.to_csv('deploy/morphospecies_map.csv') # here too for deployment .mar
 
     report_count_df = generate_split_class_report(splits, morphospecies_map)
