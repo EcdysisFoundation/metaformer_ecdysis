@@ -123,9 +123,8 @@ def _get_args() -> argparse.Namespace:
 
 def load_mapping(map_file: Path):
     with open(map_file) as f:
-        next(f)  # Skip header
-        mapping = {morphospecies_id: (morphospecies_name, taxon_id) for morphospecies_id, morphospecies_name, taxon_id in csv.reader(f)}
-
+        next(f)  # Skip header, note expected order
+        mapping = {morphospecies_id: morphospecies_name for morphospecies_id, morphospecies_name in csv.reader(f)}
         return mapping
 
 
@@ -141,7 +140,7 @@ def _main():
     inferencer.build(config, checkpoint, output_function='softmax')
     image = Image.open(args.image_path)
 
-    mapping = load_mapping(Path('deploy/taxon_map.csv'))
+    mapping = load_mapping(Path('deploy/morphospecies_map.csv'))
     predictions = inferencer(image)
 
     prediction_index = predictions.argmax().item()

@@ -2,6 +2,8 @@ from typing import List
 
 import pandas as pd
 
+MORPHOS_ID = 'morphos_id'
+MORPHOS_NAME = 'morphos_name'
 
 class BugBoxData:
 
@@ -16,16 +18,14 @@ class BugBoxData:
 
     def get_reviewed_images_df(self):
         reviewed_images = self.get_df()
-        return reviewed_images[['morphos_name', 'morphos_id', 'specimen_id', 'image', 'specimen_count']]
-
-    def get_taxon_map_df(self):
-        taxon_map = self.get_df()
-        return taxon_map[['morphos_id', 'morphos_name','specimen_id']]
+        return reviewed_images[[MORPHOS_NAME, MORPHOS_ID, 'specimen_id', 'image', 'specimen_count']]
 
     def get_morphospecies_df(self):
         morphospecies = self.get_df()
-        morphospecies = morphospecies[['morphos_id', 'morphos_name']].drop_duplicates()
+        # warning, code expects this order of ['morphos_id', 'morphos_name'].
+        morphospecies = morphospecies[[MORPHOS_ID, MORPHOS_NAME]].drop_duplicates()
         morphospecies.morphos_id = morphospecies.morphos_id.astype('str')
+        morphospecies.reset_index(drop=True)
         morphospecies = morphospecies.set_index('morphos_id')
         return morphospecies
 

@@ -20,7 +20,7 @@ class MetaformerHandler(VisionHandler):
     def __init__(self):
         super(MetaformerHandler, self).__init__()
         self.device = 'cpu'
-        self.mapping = load_mapping(Path('taxon_map.csv'))
+        self.mapping = load_mapping(Path('morphospecies_map.csv'))
         self.config = None
         self.checkpoint = None
 
@@ -108,15 +108,12 @@ class MetaformerHandler(VisionHandler):
         for confidences, indices in zip(probabilities.tolist(), class_indices.tolist()):
             primary_confidence, primary_class_index = confidences[0], indices[0]
 
-            # taxonid depricated. Currently it is returning the first specimen_id for the class from the taxon_map.csv
-            # instead of taxon_map.csv, a smaller, 2 column file could be created, similar to stats.csv.
             if primary_confidence >= minimum_confidence:
                 labels = class_names[primary_class_index]  # Map index to id
-                morphospecies, taxonid = self.mapping.get(labels, 0)  # Map id to GBIF taxon id and morphospecies name
+                morphospecies = self.mapping.get(labels, 0)  # Map id morphospecies name
             else:
                 labels = 3458
                 morphospecies = 'incertae sedis'
-                taxonid = 0
 
             response = {'confidence': round(primary_confidence*100, 2),  # Convert to percentage
                         'morphospecies_id': int(labels),
@@ -127,7 +124,7 @@ class MetaformerHandler(VisionHandler):
             # Add optional predictions if there is a confident primary prediction
             if primary_confidence >= minimum_confidence:
                 for optional_confidence, optional_class_index in zip(confidences[1:], indices[1:]):
-                    optional_name, optional_id = self.mapping.get(class_names[optional_class_index], 0)
+                    optional_name = self.mapping.get(class_names[optional_class_index], 0)
                     response['optional_preds'].append({
                         'pred_op': round(optional_confidence*100, 2),
                         'class_op': optional_name

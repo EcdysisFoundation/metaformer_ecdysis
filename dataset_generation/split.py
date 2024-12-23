@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from shutil import copy, SameFileError
+from typing import List, Dict
 
 import numpy as np
 import pandas as pd
@@ -8,9 +9,7 @@ from sklearn.model_selection import train_test_split
 
 from .utils import save_yaml_file
 
-from typing import List, Tuple, Dict
-
-
+from data import MORPHOS_ID, MORPHOS_NAME
 from . import LOGGING_LEVEL, INFO
 
 from tqdm import tqdm
@@ -230,10 +229,10 @@ def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.Data
 
     for class_id, split in splits.items():
         # id, train, test, val
-        counts.append({"morphos_id":class_id,**{split_name: len(image_paths) for split_name, image_paths in split.items()}})
+        counts.append({MORPHOS_ID:class_id, **{split_name: len(image_paths) for split_name, image_paths in split.items()}})
     return pd.DataFrame(counts)
 
-def generate_split_class_report(splits, taxon_map:pd.DataFrame):
+def generate_split_class_report(splits, morphospecies_map:pd.DataFrame):
     """
     Return the dataset sample count report
     Merges the split count with the morpho-species name
@@ -246,14 +245,12 @@ def generate_split_class_report(splits, taxon_map:pd.DataFrame):
     """
     counts_df = get_count_per_class_split(splits)
 
-    counts_df["morphos_id"] = counts_df["morphos_id"].astype(int)
+    counts_df[MORPHOS_ID] = counts_df[MORPHOS_ID].astype(int)
 
-    taxon_map.drop('specimen_id', inplace=True, axis=1)
-    taxon_map.drop_duplicates(inplace=True)
-    counts_df = taxon_map[['morphos_id', 'morphos_name']].merge(counts_df, on='morphos_id', how='right')
+    counts_df = morphospecies_map[[MORPHOS_ID, MORPHOS_NAME]].merge(counts_df, on=MORPHOS_ID, how='right')
     counts_df["total_samples"] = counts_df["train"] + counts_df["val"] + counts_df["test"]
 
-    return counts_df.sort_values(by="morphos_name")
+    return counts_df.sort_values(by=MORPHOS_NAME)
 
 def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool,
                   save_yaml: bool = True, seed: int = SEED, **kwargs):
@@ -274,8 +271,8 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
     df=df.copy()
 
     df.replace('', np.nan, inplace=True)  # Handle empty strings
-    df.dropna(subset=['morphos_id'], inplace=True)
-    df['class_name'] = df['morphos_id']
+    df.dropna(subset=[MORPHOS_ID], inplace=True)
+    df['class_name'] = df[MORPHOS_ID]
 
     # When using morphospecies class name here is actually the id of the class, converted to str, not the name
     images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented

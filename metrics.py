@@ -9,7 +9,7 @@ from yacs.config import CfgNode
 
 from datetime import datetime
 
-from dataset_generation.data import BugBoxData
+from dataset_generation.data import BugBoxData, MORPHOS_ID
 from utils import save_json
 
 
@@ -72,9 +72,22 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     if save_csv:
         db = BugBoxData()
         morphospecies_df = db.get_morphospecies_df()
+        stats['model_name'] = version
         stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
-        stats = stats.assign(model_name=version)
-        stats.to_csv(output)
+        stats_csv = 'stats.csv'
+        stats.to_csv(output / stats_csv)
+        dataset_report_ = 'dataset_report_'
+        dataset_report_path = output/f'dataset_report.csv'
+        dataset_report_df = pd.read_csv(dataset_report_path) if dataset_report_path.exists() else None
+        dataset_report_df.morphos_id = dataset_report_df.morphos_id.astype('str')
+        print('dataset_report_df: ' + str(len(dataset_report_df)))
+        logging.info(f"Length of dataset_report: {len(dataset_report_df)}, stats: {len(stats)}")
+        dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
+        dataset_report_morphos_id = dataset_report_ + MORPHOS_ID
+        dataset_report_df = dataset_report_df.set_index(dataset_report_morphos_id)
+        stats = stats.merge(dataset_report_df, how='left', left_index=True, right_index=True)
+        v = dataset_report_ + stats_csv
+        stats.to_csv(output / v)
     return stats
 
 
