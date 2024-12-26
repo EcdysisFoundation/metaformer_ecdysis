@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 from pathlib import Path
 
 from .data import BugBoxData
@@ -43,6 +44,20 @@ def main():
     db = BugBoxData()
     images = db.get_reviewed_images_df()
     images['image'] = images['image'].apply(lambda x: str(bugbox_mnt / x))
+
+    # check if files exist
+    images['exists'] = images['image'].astype(str).map(os.path.exists)
+    missing_images = images[images['exists'] == False]
+    if len(missing_images):
+        v = len(missing_images)
+        if v >= 20:
+            v = 20
+        print('some images are missing. Up to the first 20 are...')
+        print(missing_images.iloc[0:v])
+        print('saving to file in dataset_dir ....')
+        missing_images.to_csv(dataset_dir / 'missing_images.csv')
+        print('exiting...........')
+        return
 
     if args.drop_duplicates:
         images = drop_identical_images(images)
