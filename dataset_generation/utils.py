@@ -60,3 +60,12 @@ def drop_identical_images(data: pd.DataFrame):
         spinner.succeed(f'---------Dropped {num_starting_images - len(output)} duplicated images---------')
 
     return output
+
+
+def is_image_corrupted(image_path):
+    try:
+        img = Image.open(image_path)
+        img.verify()  # Verify the image structure
+        return False  # Image is not corrupted
+    except (IOError, SyntaxError) as e:
+        return True  # Image is corrupted
