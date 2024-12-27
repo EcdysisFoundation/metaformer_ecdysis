@@ -1,10 +1,11 @@
 import argparse
 import logging
+import os
 from pathlib import Path
 
 from .data import BugBoxData
 from .split import split_from_df, generate_split_class_report
-from .utils import drop_identical_images
+from .utils import drop_identical_images, is_image_corrupted
 
 from . import LOGGING_LEVEL, INFO
 
@@ -24,6 +25,7 @@ def get_args() -> argparse.Namespace:
                         help='Path to BugBox images mounted directory')
     parser.add_argument('--train-size', type=float, default=0.6, help='Relative size of the train split')
     parser.add_argument('--drop-duplicates', action='store_true', help='Drop duplicate images from the dataset')
+    parser.add_argument('--skipcheck-corrupted', action='store_false', help='Skip check for corrupted images')
     parser.add_argument('--hard-copy', action='store_true', help='Copy images instead of symlinking them')
     parser.add_argument('--minimum-images', type=int, default=20, help='Do not create a class unless it has at least '
                                                                        'this number of images')
@@ -43,6 +45,31 @@ def main():
     db = BugBoxData()
     images = db.get_reviewed_images_df()
     images['image'] = images['image'].apply(lambda x: str(bugbox_mnt / x))
+
+    # check if files exist
+    print('Checking for missing images ...')
+    images['exists'] = images['image'].astype(str).map(os.path.exists)
+    missing_images = images[images['exists'] == False]
+    if len(missing_images):
+        v = len(missing_images)
+        if v >= 20:
+            v = 20
+        print('some images are missing. Up to the first 20 are...')
+        print(missing_images.iloc[0:v])
+        print('saving to file in dataset_dir ....')
+        missing_images.to_csv(dataset_dir / 'missing_images.csv')
+        print('exiting...........')
+        return
+
+    if args.skipcheck_corrupted:
+        # check for corrupted files
+        print('checking for corrupted images ....')
+        images['corrupted'] = images['image'].astype(str).map(is_image_corrupted)
+        corrupted_images = images[images['corrupted']]
+        if len(corrupted_images):
+            corrupted_images.to_csv(dataset_dir / 'corrupted_images.csv')
+            print('Some images are corrupted, see report file, exiting ....')
+            return
 
     if args.drop_duplicates:
         images = drop_identical_images(images)

@@ -470,7 +470,7 @@ def setup_distributed(config):
         rank = -1
         world_size = -1
     torch.cuda.device(config.LOCAL_RANK)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://', timeout = datetime.timedelta(seconds=5400), world_size=world_size, rank=rank)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://', timeout = datetime.timedelta(seconds=1800), world_size=world_size, rank=rank)
     torch.distributed.barrier()
     seed = config.SEED + dist.get_rank()
     torch.manual_seed(seed)
