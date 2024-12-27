@@ -15,7 +15,6 @@ THIS_VERSION="$2"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "deployed version is ${DEPLOYED_VERSION}"
-echo "Hardcoded version: 1.22" # replace hardcoding when ready
 echo "This new version is: ${THIS_VERSION}"
 echo "Found ${GPU_COUNT} GPU(s)"
 
@@ -36,7 +35,7 @@ wait
 # Run training starting from last best checkpoint
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
-  --pretrain "output/ecdysis/morphospecies/1.22/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
+  --pretrain "output/ecdysis/morphospecies/${DEPLOYED_VERSION}/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
 wait
 # Evaluate trained model
 python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py \
