@@ -20,7 +20,6 @@ echo "Found ${GPU_COUNT} GPU(s)"
 
 DATASET="bugbox_model_${THIS_VERSION}"
 
-# data.py may be pointing to the test .csv instead.
 echo "Download latest training_selections file."
 scp ecdysis@ecdysis01.local:/pool1/srv/bugbox3/local_files/training_selections.csv ./dataset_generation/training_selections.csv || exit 11
 wait
@@ -28,7 +27,8 @@ wait
 python -m dataset_generation "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
 wait
 
-# Copy dataset report from dataset to model folder
+# Copy dataset report from dataset to model folder,
+# will fail and cause abort if dataset_generation didnt complete and generate dataset_report.csv.
 . ./deploy/copy_reports.sh "${DATASET}" "${MODEL_PREFIX}" "${THIS_VERSION}"
 
 
