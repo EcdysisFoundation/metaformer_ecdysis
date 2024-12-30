@@ -35,7 +35,10 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
     - DIRECTORY       Directory inside the output/ecdysis directory. Usually 'morphospecies'.
     - MODEL_NAME      Name of the model, will be a directory inside output/ecdysis/test_directory/
 
- When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background with `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki. In the example below, MODEL_NAME == modelVersion in the inference response. The current protocol is to use text based integer version sequence, starting with 1, 2, 3, 4, ... Past versioning used 1.20, 1.21, 1,22, ending with 1.22.
+ When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. Alternatively, running with `nohup` and running in background with `&` cannot be used, becuse of a bug in older version of Torch that conflicts with nohup. It will also terminate. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. After starting, exiting the terminal session with `exit` so that the ternimal does not terminate with SIGHUP. Some discussion about this issue is here https://discuss.pytorch.org/t/ddp-error-torch-distributed-elastic-agent-server-api-received-1-death-signal-shutting-down-workers/135720   and here https://github.com/pytorch/pytorch/issues/76894 . Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki.
+
+
+ In the example below, MODEL_NAME == modelVersion in the inference response. The current protocol is to use text based integer version sequence, starting with 1, 2, 3, 4, ... Past versioning used 1.20, 1.21, 1,22, ending with 1.22.
 
     conda activate metaformer
 

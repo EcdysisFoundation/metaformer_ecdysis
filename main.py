@@ -30,11 +30,11 @@ from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_h
 from torch.utils.tensorboard import SummaryWriter
 
 
-try:
-    # noinspection PyUnresolvedReferences
-    from apex import amp
-except ImportError:
-    amp = None
+
+# from apex import amp
+# expected to be None in env. Holdover from PyTorch 1.5, depricated with https://pytorch.org/docs/1.11/amp.html
+# can remove all refs, including --amp-opt-level
+amp = None
 
 
 def parse_option():
