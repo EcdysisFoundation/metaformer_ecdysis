@@ -20,14 +20,14 @@ def get_model_metrics(config: CfgNode):
 
     Returns: torchmetrics collection
     """
-    metrics = [Accuracy(num_classes=config.MODEL.NUM_CLASSES, average='micro'),
-               Precision(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               Recall(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               F1Score(num_classes=config.MODEL.NUM_CLASSES, average='macro')]
+    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro'),
+               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro')]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(num_classes=config.MODEL.NUM_CLASSES, reduce='macro'))
-        metrics.append(ConfusionMatrix(num_classes=config.MODEL.NUM_CLASSES))
+        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, reduce='macro'))
+        # metrics.append(ConfusionMatrix(task="multiclass", num_classes=config.MODEL.NUM_CLASSES))
 
     return MetricCollection(metrics)
 
