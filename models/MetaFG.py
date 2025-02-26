@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 
-from timm.models import register_model
-from timm.models.helpers import load_pretrained
+from timm.models import register_model, load_pretrained
 from timm.layers import trunc_normal_
 
 from .MBConv import MBConvBlock

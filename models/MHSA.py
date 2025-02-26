@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-from timm.models.layers import to_2tuple, trunc_normal_, DropPath
+from timm.models import to_2tuple, trunc_normal_, DropPath
 from torch.nn import functional as F
 
 class Mlp(nn.Module):
