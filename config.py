@@ -173,8 +173,6 @@ _C.TEST.CROP = True
 # -----------------------------------------------------------------------------
 # Mixed precision opt level, if O0, no amp is used ('O0', 'O1', 'O2')
 # overwritten by command line argument
-_C.AMP_OPT_LEVEL = 'O0'
-_C.USE_AMP = False
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
@@ -198,10 +196,10 @@ _C.LOCAL_RANK = 0
 
 def _update_config_from_file(config, cfg_file):
     config.defrost()
-    
+
     with open(cfg_file, 'r') as f:
         yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
-    
+
     for cfg in yaml_cfg.setdefault('BASE', ['']):
         if cfg:
             _update_config_from_file(
@@ -248,13 +246,11 @@ def update_config(config, args):
         config.THROUGHPUT_MODE = True
     if args.sampler:
         config.TRAIN.SAMPLER = args.sampler
-    if args.amp:
-        config.USE_AMP = True
 
-        
+
     if args.num_workers is not None:
         config.DATA.NUM_WORKERS = args.num_workers
-        
+
     #set lr and weight decay
     if args.lr is not None:
         config.TRAIN.BASE_LR = args.lr

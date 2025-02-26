@@ -12,7 +12,6 @@ MODEL:
   NAME: ecdysis
 PRINT_FREQ: 10
 SAVE_FREQ: 1000  # only save_csv best and last checkpoints
-USE_AMP: True
 TRAIN:
   USE_CHECKPOINT: True  # Mandatory for handling batches of 4 images
   EPOCHS: 1 # This takes a few hours

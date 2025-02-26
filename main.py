@@ -7,7 +7,6 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -31,13 +30,6 @@ from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_h
 from torch.utils.tensorboard import SummaryWriter
 
 
-
-# from apex import amp
-# expected to be None in env. Holdover from PyTorch 1.5, depricated with https://pytorch.org/docs/1.11/amp.html
-# can remove all refs, including --amp-opt-level
-amp = None
-
-
 def parse_option():
     parser = argparse.ArgumentParser('MetaFG training and evaluation script', add_help=False)
     parser.add_argument('--cfg', type=str, required=True, metavar="FILE", help='path to config file', )
@@ -59,9 +51,6 @@ def parse_option():
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
     parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save_csv memory")
-    parser.add_argument('--amp-opt-level', type=str, default='O0', choices=['O0', 'O1', 'O2'],
-                        help='mixed precision opt level, if O0, no amp is used')  # Disabled by default due to apex library installation issues
-    parser.add_argument('--amp', action='store_true', help='Use Pytorch\'s native Automatic Mixed Precision')
     parser.add_argument('--output', default='output', type=str, metavar='PATH',
                         help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
     parser.add_argument('--tag', help='tag of experiment')
@@ -100,9 +89,6 @@ def parse_option():
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
                         help='Disable logging of UserWarnings')
 
-    # distributed training
-    parser.add_argument("--local_rank", type=int, required=True, help='local rank for DistributedDataParallel')
-
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
@@ -132,7 +118,7 @@ def main(config):
 
     model = model.cuda()
 
-    scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
+    scaler = torch.cuda.amp.GradScaler(enabled=False)
 
     optimizer = build_optimizer(config, model)
 
@@ -292,7 +278,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
 
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=config.USE_AMP):
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
                 if config.DATA.ADD_META:
 
                     outputs = model(samples, meta)
@@ -486,9 +472,6 @@ if __name__ == '__main__':
 
     if args.ignore_user_warnings:
         warnings.filterwarnings('ignore', category=UserWarning)
-
-    if config.AMP_OPT_LEVEL != "O0":
-        assert amp is not None, "amp not installed!"
 
     setup_distributed(config)
     print(config.OUTPUT)
