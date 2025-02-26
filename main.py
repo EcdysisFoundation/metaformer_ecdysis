@@ -8,13 +8,11 @@ from pathlib import Path
 
 import numpy as np
 
+import timm
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 
-
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.utils import accuracy, AverageMeter
 from tqdm import tqdm
 
 from callbacks import EarlyStopper
@@ -145,9 +143,9 @@ def main(config):
     lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
     if config.AUG.MIXUP > 0.:
         # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
+        criterion = timm.loss.SoftTargetCrossEntropy()
     elif config.MODEL.LABEL_SMOOTHING > 0.:
-        criterion = LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
+        criterion = timm.loss.LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -249,8 +247,8 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
     optimizer.zero_grad()
 
     num_steps = len(data_loader)
-    loss_meter = AverageMeter()
-    norm_meter = AverageMeter()
+    loss_meter = timm.utils.AverageMeter()
+    norm_meter = timm.utils.AverageMeter()
 
     pbar_description = f'Training | Rank {dist.get_rank()} | ' \
                        f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
@@ -351,10 +349,10 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
 
-    batch_time = AverageMeter()
-    loss_meter = AverageMeter()
-    acc1_meter = AverageMeter()
-    acc5_meter = AverageMeter()
+    batch_time = timm.utils.AverageMeter()
+    loss_meter = timm.utils.AverageMeter()
+    acc1_meter = timm.utils.AverageMeter()
+    acc5_meter = timm.utils.AverageMeter()
 
     end = time.time()
 
@@ -387,7 +385,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
                 # measure accuracy and record loss
                 loss = criterion(output, target)
-                acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
+                acc1, acc5 = timm.utils.accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
                 metric.update(output, target)
 

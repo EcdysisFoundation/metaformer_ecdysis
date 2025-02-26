@@ -11,9 +11,8 @@ import torch
 import numpy as np
 import torch.distributed as dist
 from torchvision import datasets, transforms
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.data import Mixup
-from timm.data import create_transform
+import timm
+
 from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
@@ -87,7 +86,7 @@ def build_loader(config):
         mixup_fn = None
         mixup_active = config.AUG.MIXUP > 0 or config.AUG.CUTMIX > 0. or config.AUG.CUTMIX_MINMAX is not None
         if mixup_active:
-            mixup_fn = Mixup(
+            mixup_fn = timm.data.Mixup(
                 mixup_alpha=config.AUG.MIXUP, cutmix_alpha=config.AUG.CUTMIX, cutmix_minmax=config.AUG.CUTMIX_MINMAX,
                 prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
                 label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
@@ -150,7 +149,7 @@ def build_transform(is_train, config):
     resize_im = config.DATA.IMG_SIZE > 32
     if is_train:
         # this should always dispatch to transforms_imagenet_train
-        transform = create_transform(
+        transform = timm.data.create_transform(
             input_size=config.DATA.IMG_SIZE,
             is_training=True,
             color_jitter=config.AUG.COLOR_JITTER if config.AUG.COLOR_JITTER > 0 else None,
@@ -182,5 +181,6 @@ def build_transform(is_train, config):
             )
 
     t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
+    t.append(transforms.Normalize(
+        timm.data.constants.IMAGENET_DEFAULT_MEAN, timm.data.constants.IMAGENET_DEFAULT_STD))
     return transforms.Compose(t)

@@ -1,6 +1,6 @@
 import argparse
 import torch
-from timm.models import create_model
+import timm
 from models.CoAt import *
 
 try:
@@ -37,7 +37,7 @@ def main():
     else:
         raise ValueError('invalid input shape')
 
-    model = create_model(
+    model = timm.models.create_model(
         args.model,
         pretrained=False,
         num_classes=1000,

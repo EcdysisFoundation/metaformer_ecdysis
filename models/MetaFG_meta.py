@@ -1,9 +1,6 @@
+import timm
 import torch
 import torch.nn as nn
-
-from timm.models.helpers import load_pretrained
-from timm.models.registry import register_model
-from timm.models.layers import trunc_normal_
 
 from MBConv import MBConvBlock
 from MHSA import MHSABlock, Mlp
@@ -45,7 +42,7 @@ def make_blocks(stage_index,depths,embed_dims,img_size,dpr,extra_token_num=1,num
         else:
             raise NotImplementedError("We only support conv and mhsa")
     return blocks
-    
+
 
 class MetaFG_Meta(nn.Module):
     def __init__(self,img_size=224,in_chans=3, num_classes=1000,
@@ -83,11 +80,11 @@ class MetaFG_Meta(nn.Module):
                                         nn.ReLU(inplace=True),
                                         nn.LayerNorm(attn_embed_dims[1]),
                                         ResNormLayer(attn_embed_dims[1]),
-                                        ) if meta_dim > 0 else nn.Identity()  
+                                        ) if meta_dim > 0 else nn.Identity()
                 setattr(self, f"meta_{ind+1}_head_1", meta_head_1)
                 setattr(self, f"meta_{ind+1}_head_2", meta_head_2)
-        
-        
+
+
         stem_chs = (3 * (conv_embed_dims[0] // 4), conv_embed_dims[0])
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(conv_depths[1:]+attn_depths))]
         #stage_0
@@ -108,7 +105,7 @@ class MetaFG_Meta(nn.Module):
         #stage_2
         self.stage_2 = nn.ModuleList(make_blocks(2,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//4,
                                       dpr=dpr,num_heads=num_heads,extra_token_num=extra_token_num,mlp_ratio=mlp_ratio,stage_type='conv'))
-        
+
         #stage_3
         self.cls_token_1 = nn.Parameter(torch.zeros(1, 1, attn_embed_dims[0]))
         self.stage_3 = nn.ModuleList(make_blocks(3,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//8,
@@ -118,7 +115,7 @@ class MetaFG_Meta(nn.Module):
         self.stage_4 = nn.ModuleList(make_blocks(4,conv_depths+attn_depths,conv_embed_dims+attn_embed_dims,img_size//16,
                                       dpr=dpr,num_heads=num_heads,extra_token_num=extra_token_num,mlp_ratio=mlp_ratio,stage_type='mhsa'))
         self.norm_2 = attn_norm_layer(attn_embed_dims[1])
-        
+
         #Aggregate
         if not self.only_last_cls:
             self.cl_1_fc = nn.Sequential(*[Mlp(in_features=attn_embed_dims[0], out_features=attn_embed_dims[1]),
@@ -128,13 +125,13 @@ class MetaFG_Meta(nn.Module):
             self.norm_1 = attn_norm_layer(attn_embed_dims[0])
         # Classifier head
         self.head = nn.Linear(attn_embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
-        
-        trunc_normal_(self.cls_token_1, std=.02)
-        trunc_normal_(self.cls_token_2, std=.02)
+
+        timm.models.layers.trunc_normal_(self.cls_token_1, std=.02)
+        timm.models.layers.trunc_normal_(self.cls_token_2, std=.02)
         self.apply(self._init_weights)
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            timm.models.layers.trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -150,7 +147,7 @@ class MetaFG_Meta(nn.Module):
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
-    
+
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'cls_token_1','cls_token_2'}
@@ -181,7 +178,7 @@ class MetaFG_Meta(nn.Module):
                 meta_2 = meta_2.reshape(B, -1, self.attn_embed_dims[1])
                 extra_tokens_1.append(meta_1)
                 extra_tokens_2.append(meta_2)
-            
+
         x = self.stage_0(x)
         x = self.bn1(x)
         x = self.act1(x)
@@ -200,7 +197,7 @@ class MetaFG_Meta(nn.Module):
             cls_1 = x[:, :1, :]
             cls_1 = self.norm_1(cls_1)
             cls_1 = self.cl_1_fc(cls_1)
-        
+
         x = x[:, self.extra_token_num:, :]
         H1,W1 = self.img_size//16,self.img_size//16
         x = x.reshape(B,H1,W1,-1).permute(0, 3, 1, 2).contiguous()
@@ -231,33 +228,33 @@ class MetaFG_Meta(nn.Module):
                 meta = mask * meta
         x = self.forward_features(x,meta)
         x = self.head(x)
-        return x 
+        return x
 
-@register_model
+@timm.models.registry.register_model
 def MetaFG_meta_0(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [64,96,192],attn_embed_dims=[384,768],
                  conv_depths = [2,2,3],attn_depths = [5,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_0']
     if pretrained:
-        load_pretrained(
+        timm.models.helpers.load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
-@register_model
+@timm.models.registry.register_model
 def MetaFG_meta_1(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [64,96,192],attn_embed_dims=[384,768],
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_1']
     if pretrained:
-        load_pretrained(
+        timm.models.helpers.load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
-@register_model
+@timm.models.registry.register_model
 def MetaFG_meta_2(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [128,128,256],attn_embed_dims=[512,1024],
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_2']
     if pretrained:
-        load_pretrained(
+        timm.models.helpers.load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
 if __name__ == "__main__":
