@@ -2,6 +2,8 @@ import timm
 import torch
 import torch.nn as nn
 
+from timm.models import register_model
+
 from MBConv import MBConvBlock
 from MHSA import MHSABlock, Mlp
 from meta_encoder import ResNormLayer
@@ -230,7 +232,7 @@ class MetaFG_Meta(nn.Module):
         x = self.head(x)
         return x
 
-@timm.models.registry.register_model
+@register_model
 def MetaFG_meta_0(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [64,96,192],attn_embed_dims=[384,768],
                  conv_depths = [2,2,3],attn_depths = [5,2],num_heads=8,mlp_ratio=4., **kwargs)
@@ -239,7 +241,7 @@ def MetaFG_meta_0(pretrained=False, **kwargs):
         timm.models.helpers.load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
-@timm.models.registry.register_model
+@register_model
 def MetaFG_meta_1(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [64,96,192],attn_embed_dims=[384,768],
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)
@@ -248,7 +250,7 @@ def MetaFG_meta_1(pretrained=False, **kwargs):
         timm.models.helpers.load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
-@timm.models.registry.register_model
+@register_model
 def MetaFG_meta_2(pretrained=False, **kwargs):
     model = MetaFG_Meta(conv_embed_dims = [128,128,256],attn_embed_dims=[512,1024],
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)

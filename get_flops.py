@@ -37,7 +37,7 @@ def main():
     else:
         raise ValueError('invalid input shape')
 
-    model = timm.models.create_model(
+    model = timm.create_model(
         args.model,
         pretrained=False,
         num_classes=1000,
