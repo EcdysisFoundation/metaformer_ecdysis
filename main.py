@@ -21,7 +21,8 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
-from models import build_model
+#from models import build_model
+from models.build import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
 from optimizer import build_optimizer

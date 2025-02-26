@@ -2,9 +2,11 @@
 
 ## Environment
 
-All required packages are installed in the `metaformer` conda virtual environment. To activate it use `conda activate metaformer` inside the shell.
+All required packages are installed in the `pytorch` conda virtual environment. To activate it use `conda activate pytorch` inside the shell.
 
-At present the metaformer-amp environment contains package versions that do not work with the model. Attempting to use Nano in the metaformer environment results in a segmentation fault, but vim works. Nano in metaformer environment likely broken from previous modifications of LD_LIBRARY_PATH.
+To update or install libraries, only use the envionment.yml file. Edit the file and use the following to update the environment. Only install python from Conda Forge, then install all Python packages from PIP because Pytorch is only supported on PIP now, and installing everything through PIP will help ensure library compatibilities.
+
+`conda env update --file environment.yml  --prune`
 
 ## Dataset generation
 
