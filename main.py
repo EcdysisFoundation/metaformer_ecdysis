@@ -89,6 +89,9 @@ def parse_option():
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
                         help='Disable logging of UserWarnings')
 
+    # distributed training
+    parser.add_argument("--local_rank", type=int, help='local rank for DistributedDataParallel')
+
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
