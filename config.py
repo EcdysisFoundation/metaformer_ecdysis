@@ -269,9 +269,6 @@ def update_config(config, args):
     if args.pretrain is not None:
         config.MODEL.PRETRAINED = args.pretrain
 
-    # set local rank for distributed training
-    config.LOCAL_RANK = args.local_rank
-
     # output folder
     config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG, str(config.VERSION))
 

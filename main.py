@@ -89,9 +89,6 @@ def parse_option():
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
                         help='Disable logging of UserWarnings')
 
-    # distributed training
-    parser.add_argument("--local_rank", type=int, help='local rank for DistributedDataParallel')
-
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
@@ -100,7 +97,7 @@ def parse_option():
 
 
 def main(config):
-    torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it.
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  # needed because cuda hangs without it.
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -125,7 +122,7 @@ def main(config):
 
     optimizer = build_optimizer(config, model)
 
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
     print(torch.cuda.is_available())
 
     model_without_ddp = model.module
@@ -456,10 +453,7 @@ def setup_distributed(config):
         rank = int(os.environ["RANK"])
         world_size = int(os.environ['WORLD_SIZE'])
         print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
-    else:
-        rank = -1
-        world_size = -1
-    torch.cuda.device(config.LOCAL_RANK)
+    torch.cuda.device(int(os.environ["LOCAL_RANK"]))
     torch.distributed.init_process_group(backend='nccl', init_method='env://', timeout = datetime.timedelta(seconds=1800), world_size=world_size, rank=rank)
     torch.distributed.barrier()
     seed = config.SEED + dist.get_rank()
@@ -495,7 +489,7 @@ if __name__ == '__main__':
 
     os.makedirs(config.OUTPUT, exist_ok=True)
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
-                           local_rank=config.LOCAL_RANK)
+                           local_rank=int(os.environ["LOCAL_RANK"]))
 
     main(config)
 
