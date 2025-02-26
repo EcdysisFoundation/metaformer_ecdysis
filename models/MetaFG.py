@@ -1,8 +1,9 @@
-import timm
 import torch
 import torch.nn as nn
 
 from timm.models import register_model
+from timm.models.helpers import load_pretrained
+from timm.layers import trunc_normal_
 
 from .MBConv import MBConvBlock
 from .MHSA import MHSABlock, Mlp
@@ -101,12 +102,12 @@ class MetaFG(nn.Module):
         # Classifier head
         self.head = nn.Linear(attn_embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
 
-        timm.models.layers.trunc_normal_(self.cls_token_1, std=.02)
-        timm.models.layers.trunc_normal_(self.cls_token_2, std=.02)
+        trunc_normal_(self.cls_token_1, std=.02)
+        trunc_normal_(self.cls_token_2, std=.02)
         self.apply(self._init_weights)
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            timm.models.layers.trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -185,7 +186,7 @@ def MetaFG_0(pretrained=False, **kwargs):
                  conv_depths = [2,2,3],attn_depths = [5,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_0']
     if pretrained:
-        timm.models.helpers.load_pretrained(
+        load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
 
@@ -195,7 +196,7 @@ def MetaFG_1(pretrained=False, **kwargs):
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_1']
     if pretrained:
-        timm.models.helpers.load_pretrained(
+        load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
 
@@ -205,7 +206,7 @@ def MetaFG_2(pretrained=False, **kwargs):
                  conv_depths = [2,2,6],attn_depths = [14,2],num_heads=8,mlp_ratio=4., **kwargs)
     model.default_cfg = default_cfgs['MetaFG_2']
     if pretrained:
-        timm.models.helpers.load_pretrained(
+        load_pretrained(
             model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
 

@@ -1,7 +1,7 @@
 import math
-import timm
 import torch
 import torch.nn as nn
+from timm.models.layers import to_2tuple, trunc_normal_, DropPath
 from torch.nn import functional as F
 
 class Mlp(nn.Module):
@@ -63,7 +63,7 @@ class Relative_Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        timm.models.layers.trunc_normal_(self.relative_position_bias_table, std=.02)
+        trunc_normal_(self.relative_position_bias_table, std=.02)
         self.softmax = nn.Softmax(dim=-1)
     def forward(self, x,):
         """
@@ -97,7 +97,7 @@ class OverlapPatchEmbed(nn.Module):
 
     def __init__(self, patch_size=7, stride=4, in_chans=3, embed_dim=768):
         super().__init__()
-        patch_size = timm.models.layers.to_2tuple(patch_size)
+        patch_size = to_2tuple(patch_size)
         self.patch_size = patch_size
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size[0] // 2, patch_size[1] // 2))
@@ -107,7 +107,7 @@ class OverlapPatchEmbed(nn.Module):
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            timm.models.layers.trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -137,12 +137,12 @@ class MHSABlock(nn.Module):
         else:
             self.patch_embed = None
             self.img_size = image_size
-        self.img_size = timm.models.layers.to_2tuple(self.img_size)
+        self.img_size = to_2tuple(self.img_size)
 
         self.norm1 = norm_layer(output_dim)
         self.attn = Relative_Attention(
             output_dim,self.img_size, extra_token_num=extra_token_num,num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        self.drop_path = timm.models.layers.DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(output_dim)
         mlp_hidden_dim = int(output_dim * mlp_ratio)
         self.mlp = Mlp(in_features=output_dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
