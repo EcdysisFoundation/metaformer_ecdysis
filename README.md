@@ -54,9 +54,7 @@ Deployment start with reviewing the trianing output. Move files to the share dri
 
     mkdir /pool1/smb/metaformer-stats/MODEL_NAME
 
-    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/stats.csv /pool1/smb/metaformer-stats/MODEL_NAME/stats.csv
-
-    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/dataset_report.csv /pool1/smb/metaformer-stats/MODEL_NAME/dataset_report.csv
+    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/dataset_report_stats.csv /pool1/smb/metaformer-stats/MODEL_NAME/dataset_report_stats.csv
 
     scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/training_results.csv /pool1/smb/metaformer-stats/MODEL_NAME/training_results.csv
 
@@ -64,7 +62,7 @@ Once review is completed, run the torch-model-archiver on Ecdysis02, in the cond
 
 Save a copy of metaformer.mar in case we need to revert, (see Archive and Revert)
 
-    cp model_store/metaformer.mar output/ecdysis/morphospecies/metaformer_MODEL_NAME.mar
+    cp deploy/model_store/metaformer.mar output/ecdysis/morphospecies/MODEL_NAME/metaformer.mar
 
 Activate environment and run torch-model-archiver.
 
@@ -82,7 +80,7 @@ Once the new model is served through Torchserve (see below), we update the model
 
 ### Archive and Revert
 
-The metaformer.mar file should be saved before overwriting to be able to easily revert to a previous model if necessary. Formerly, only the model output and model dataset files were saved. To recreate a .mar file to revert a deployment could be incumbered by changes in the codebase. Both can be saved for some time, then deleted as we need space to be recovered. More storage is available on Ecdysis01 as well. Here is more info about doing archiving previous models and managing space.
+The metaformer.mar file should be saved before overwriting to be able to easily revert to a previous model if necessary. Formerly, only the model output and model dataset files were saved. To recreate a .mar file to revert a deployment could be incumbered by changes in the codebase. Both can be saved for some time, then deleted as we need space to be recovered. More storage is available on Ecdysis01 as well (see /srv/metaformer_backups). Here is more info about doing archiving previous models and managing space.
 
 On Ecdysis02 in MetaFormer/output/ecdysis/morphospecies, gzip old model version output folders.
 
@@ -142,3 +140,7 @@ execute
 tensorboard --logdir output/ecdysis/model-name/tensorboard --bind_all
 ```
 then open a browser and go to [](host-or-ip:6006)
+
+## Origination
+
+This repo was forked from https://github.com/dqshuai/MetaFormer
