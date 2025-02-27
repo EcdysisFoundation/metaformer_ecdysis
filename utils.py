@@ -34,7 +34,7 @@ def relative_bias_interpolate(checkpoint,config):
 
 
 def load_pretained(config, model, logger=None, strict=False):
-    checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu')
+    checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu', weights_only=False)
     if 'model' not in checkpoint:
         if 'state_dict_ema' in checkpoint:
             checkpoint['model'] = checkpoint['state_dict_ema']
