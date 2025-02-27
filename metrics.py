@@ -26,8 +26,7 @@ def get_model_metrics(config: CfgNode):
                F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro')]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, reduce='macro'))
-        # metrics.append(ConfusionMatrix(task="multiclass", num_classes=config.MODEL.NUM_CLASSES))
+        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'))
 
     return MetricCollection(metrics)
 
