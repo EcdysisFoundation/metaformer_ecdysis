@@ -39,19 +39,31 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     Returns:
         dict[str,numpy array]
     """
+    if 'MulticlassStatScores' in metrics.keys():
+        stats = metrics['MulticlassStatScores']
+        tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
 
-    stats = metrics['StatScores']
-    tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
-
-    return {'TP': tp,
-            'FP': fp,
-            'TN': tn,
-            'FN': fn,
-            'Precision': tp / (tp + fp),
-            'Recall': tp / (tp + fn),
-            'F1': 2*tp / (2*tp + fp + fn),
-            total_column_name: tp + fn
-           }
+        return {'TP': tp,
+                'FP': fp,
+                'TN': tn,
+                'FN': fn,
+                'Precision': tp / (tp + fp),
+                'Recall': tp / (tp + fn),
+                'F1': 2*tp / (2*tp + fp + fn),
+                total_column_name: tp + fn
+            }
+    else:
+        # return zeros if MulticlassStatScores not entered, and print keys in case not as expected
+        print(metrics.keys())
+        return {'TP': 0,
+                'FP': 0,
+                'TN': 0,
+                'FN': 0,
+                'Precision': 0,
+                'Recall': 0,
+                'F1': 0,
+                total_column_name: 0
+        }
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
     """
