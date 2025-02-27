@@ -455,7 +455,6 @@ def setup_distributed(config):
         timeout = datetime.timedelta(seconds=1800),
         world_size=world_size,
         rank=rank)
-    torch.distributed.barrier()
     seed = config.SEED + dist.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
