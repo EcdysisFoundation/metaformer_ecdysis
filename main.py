@@ -108,7 +108,6 @@ def main(config):
         # The data needs to be loaded before the model is created to fill the num_classes field
         dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
-    device = torch.device("cuda")
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
 
@@ -117,12 +116,11 @@ def main(config):
 
     model = model.cuda()
 
-    scaler = torch.cuda.amp.GradScaler(enabled=False)
+    scaler = torch.amp.GradScaler('cuda', enabled=False)
 
     optimizer = build_optimizer(config, model)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
-    print(torch.cuda.is_available())
 
     model_without_ddp = model.module
 
@@ -255,7 +253,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
                        f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
     with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
 
-        device = torch.device('cuda')
         for idx, data in enumerate(data_loader):
 
             if idx == 0:
@@ -448,10 +445,9 @@ def throughput(data_loader, model, logger):
 
 
 def setup_distributed(config):
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        rank = int(os.environ["RANK"])
-        world_size = int(os.environ['WORLD_SIZE'])
-        print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ['WORLD_SIZE'])
+    print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
     torch.cuda.device(int(os.environ["LOCAL_RANK"]))
     torch.distributed.init_process_group(
         backend='nccl',

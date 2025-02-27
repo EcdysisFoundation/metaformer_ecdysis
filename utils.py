@@ -4,12 +4,6 @@ import importlib
 import torch.distributed as dist
 import json
 
-try:
-    # noinspection PyUnresolvedReferences
-    from apex import amp
-except ImportError:
-    amp = None
-
 def relative_bias_interpolate(checkpoint,config):
     for k in list(checkpoint['model']):
         if 'relative_position_index' in k:
@@ -37,8 +31,8 @@ def relative_bias_interpolate(checkpoint,config):
             relative_position_bias_table = torch.cat((cls_bias,relative_position_bias_table),dim=0)
             checkpoint['model'][k] = relative_position_bias_table
     return checkpoint
-    
-    
+
+
 def load_pretained(config, model, logger=None, strict=False):
     checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu')
     if 'model' not in checkpoint:
@@ -61,7 +55,7 @@ def load_pretained(config, model, logger=None, strict=False):
         for k in list(checkpoint['model']):
             if 'meta' in k:
                 del checkpoint['model'][k]
-            
+
     checkpoint = relative_bias_interpolate(checkpoint,config)
     if 'point_coord' in checkpoint['model']:
         if logger is not None:
@@ -93,8 +87,6 @@ def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
         config.defrost()
         config.TRAIN.START_EPOCH = checkpoint['epoch'] + 1
         config.freeze()
-        if 'amp' in checkpoint and config.AMP_OPT_LEVEL != "O0" and checkpoint['config'].AMP_OPT_LEVEL != "O0":
-            amp.load_state_dict(checkpoint['amp'])
         logger.info(f"=> loaded successfully '{config.MODEL.RESUME}' (epoch {checkpoint['epoch']})")
         if 'max_accuracy' in checkpoint:
             max_accuracy = checkpoint['max_accuracy']
@@ -123,8 +115,6 @@ def save_checkpoint(config, epoch, model, max_accuracy, optimizer, lr_scheduler,
                   'max_accuracy': max_accuracy,
                   'epoch': epoch,
                   'config': config}
-    if config.AMP_OPT_LEVEL != "O0":
-        save_state['amp'] = amp.state_dict()
 
     save_path = os.path.join(config.OUTPUT, f'{name}.pth')
     torch.save(save_state, save_path)
