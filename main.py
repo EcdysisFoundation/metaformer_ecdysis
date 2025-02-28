@@ -7,34 +7,26 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 
-
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.utils import accuracy, AverageMeter
+from timm.utils import AverageMeter, accuracy
 from tqdm import tqdm
 
 from callbacks import EarlyStopper
 from config import get_config
 from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
-from models import build_model
+#from models import build_model
+from models.build import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
 from optimizer import build_optimizer
 from logger import create_logger
 from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_helper, reduce_tensor, load_pretained
 from torch.utils.tensorboard import SummaryWriter
-
-
-
-# from apex import amp
-# expected to be None in env. Holdover from PyTorch 1.5, depricated with https://pytorch.org/docs/1.11/amp.html
-# can remove all refs, including --amp-opt-level
-amp = None
 
 
 def parse_option():
@@ -58,9 +50,6 @@ def parse_option():
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
     parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save_csv memory")
-    parser.add_argument('--amp-opt-level', type=str, default='O0', choices=['O0', 'O1', 'O2'],
-                        help='mixed precision opt level, if O0, no amp is used')  # Disabled by default due to apex library installation issues
-    parser.add_argument('--amp', action='store_true', help='Use Pytorch\'s native Automatic Mixed Precision')
     parser.add_argument('--output', default='output', type=str, metavar='PATH',
                         help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
     parser.add_argument('--tag', help='tag of experiment')
@@ -99,9 +88,6 @@ def parse_option():
     parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
                         help='Disable logging of UserWarnings')
 
-    # distributed training
-    parser.add_argument("--local_rank", type=int, required=True, help='local rank for DistributedDataParallel')
-
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
@@ -110,7 +96,7 @@ def parse_option():
 
 
 def main(config):
-    torch.cuda.set_device(config.LOCAL_RANK)  # needed because cuda hangs without it.
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  # needed because cuda hangs without it.
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -122,7 +108,6 @@ def main(config):
         # The data needs to be loaded before the model is created to fill the num_classes field
         dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
-    device = torch.device("cuda")
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
 
@@ -131,12 +116,11 @@ def main(config):
 
     model = model.cuda()
 
-    scaler = torch.cuda.amp.GradScaler(enabled=config.USE_AMP)
+    scaler = torch.amp.GradScaler('cuda', enabled=False)
 
     optimizer = build_optimizer(config, model)
 
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.LOCAL_RANK], broadcast_buffers=False)
-    print(torch.cuda.is_available())
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
 
     model_without_ddp = model.module
 
@@ -269,7 +253,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
                        f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
     with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
 
-        device = torch.device('cuda')
         for idx, data in enumerate(data_loader):
 
             if idx == 0:
@@ -291,7 +274,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
 
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=config.USE_AMP):
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
                 if config.DATA.ADD_META:
 
                     outputs = model(samples, meta)
@@ -462,16 +445,16 @@ def throughput(data_loader, model, logger):
 
 
 def setup_distributed(config):
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        rank = int(os.environ["RANK"])
-        world_size = int(os.environ['WORLD_SIZE'])
-        print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
-    else:
-        rank = -1
-        world_size = -1
-    torch.cuda.device(config.LOCAL_RANK)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://', timeout = datetime.timedelta(seconds=1800), world_size=world_size, rank=rank)
-    torch.distributed.barrier()
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ['WORLD_SIZE'])
+    print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
+    torch.cuda.device(int(os.environ["LOCAL_RANK"]))
+    torch.distributed.init_process_group(
+        backend='nccl',
+        init_method='env://',
+        timeout = datetime.timedelta(seconds=1800),
+        world_size=world_size,
+        rank=rank)
     seed = config.SEED + dist.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -485,9 +468,6 @@ if __name__ == '__main__':
 
     if args.ignore_user_warnings:
         warnings.filterwarnings('ignore', category=UserWarning)
-
-    if config.AMP_OPT_LEVEL != "O0":
-        assert amp is not None, "amp not installed!"
 
     setup_distributed(config)
     print(config.OUTPUT)
@@ -508,7 +488,7 @@ if __name__ == '__main__':
 
     os.makedirs(config.OUTPUT, exist_ok=True)
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}",
-                           local_rank=config.LOCAL_RANK)
+                           local_rank=int(os.environ["LOCAL_RANK"]))
 
     main(config)
 

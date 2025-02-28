@@ -27,17 +27,17 @@ wait
 python -m dataset_generation "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
 wait
 
-# Copy dataset report from dataset to model folder,
-# will fail and cause abort if dataset_generation didnt complete and generate dataset_report.csv.
+
+# Copy dataset report from dataset to model folder
 . ./deploy/copy_reports.sh "${DATASET}" "${MODEL_PREFIX}" "${THIS_VERSION}"
 
 
 # Run training starting from last best checkpoint
-python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py --cfg configs/ecdysis.yaml \
+/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
   --pretrain "output/ecdysis/morphospecies/${DEPLOYED_VERSION}/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
 wait
 # Evaluate trained model
-python -m torch.distributed.launch --nproc_per_node ${GPU_COUNT} --master_port 12345 main.py \
+/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
   --cfg "${MODEL_PREFIX}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET}" --eval  --pretrain "${MODEL_PREFIX}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION" > "${MODEL_PREFIX}/${THIS_VERSION}/console_output.txt"
 wait

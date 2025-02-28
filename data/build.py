@@ -11,15 +11,15 @@ import torch
 import numpy as np
 import torch.distributed as dist
 from torchvision import datasets, transforms
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.data import Mixup
+
 from timm.data import create_transform
+from timm.data.mixup import Mixup
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
 from .cached_image_folder import CachedImageFolder
 from .samplers import SubsetRandomSampler, DistributedWeightedSampler
-from .dataset_fg import DatasetMeta
 
 
 def build_loader(config):
@@ -99,62 +99,8 @@ def build_loader(config):
 
 def build_dataset(is_train, config, logger):
     transform = build_transform(is_train, config)
-    if config.DATA.DATASET == 'imagenet':
-        prefix = 'train' if is_train else 'val'
-        if config.DATA.ZIP_MODE:
-            ann_file = prefix + "_map.txt"
-            prefix = prefix + ".zip@/"
-            dataset = CachedImageFolder(config.DATA.DATA_PATH, ann_file, prefix, transform,
-                                        cache_mode=config.DATA.CACHE_MODE if is_train else 'part')
-        else:
-            root = './datasets/imagenet'
-            dataset = datasets.ImageFolder(root, transform=transform)
-        nb_classes = 1000
-    elif config.DATA.DATASET == 'inaturelist2021':
-        root = './datasets/inaturelist2021'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET,
-                             class_ratio=config.DATA.CLASS_RATIO,per_sample=config.DATA.PER_SAMPLE)
-        nb_classes = 10000
-    elif config.DATA.DATASET == 'inaturelist2021_mini':
-        root = './datasets/inaturelist2021_mini'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 10000
-    elif config.DATA.DATASET == 'inaturelist2017':
-        root = './datasets/inaturelist2017'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 5089
-    elif config.DATA.DATASET == 'inaturelist2018':
-        root = './datasets/inaturelist2018'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 8142
-    elif config.DATA.DATASET == 'cub-200':
-        root = './datasets/cub-200'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 200
-    elif config.DATA.DATASET == 'stanfordcars':
-        root = './datasets/stanfordcars'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 196
-    elif config.DATA.DATASET == 'oxfordflower':
-        root = './datasets/oxfordflower'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 102
-    elif config.DATA.DATASET == 'stanforddogs':
-        root = './datasets/stanforddogs'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 120
-    elif config.DATA.DATASET == 'nabirds':
-        root = './datasets/nabirds'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 555
-    elif config.DATA.DATASET == 'aircraft':
-        root = './datasets/aircraft'
-        dataset = DatasetMeta(root=root,transform=transform,train=is_train,aux_info=config.DATA.ADD_META,dataset=config.DATA.DATASET)
-        nb_classes = 100
-    elif config.DATA.DATASET.startswith('bugbox'):
+    if config.DATA.DATASET.startswith('bugbox'):
         dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
-        
-        #print('hllo')
         if is_train:
             config.DATA.CLASS_NAMES = dataset.classes
     else:
@@ -237,5 +183,6 @@ def build_transform(is_train, config):
             )
 
     t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
+    t.append(transforms.Normalize(
+        IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
     return transforms.Compose(t)

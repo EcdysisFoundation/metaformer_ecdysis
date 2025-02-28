@@ -171,10 +171,7 @@ _C.TEST.CROP = True
 # -----------------------------------------------------------------------------
 # Misc
 # -----------------------------------------------------------------------------
-# Mixed precision opt level, if O0, no amp is used ('O0', 'O1', 'O2')
 # overwritten by command line argument
-_C.AMP_OPT_LEVEL = 'O0'
-_C.USE_AMP = False
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
@@ -198,10 +195,10 @@ _C.LOCAL_RANK = 0
 
 def _update_config_from_file(config, cfg_file):
     config.defrost()
-    
+
     with open(cfg_file, 'r') as f:
         yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
-    
+
     for cfg in yaml_cfg.setdefault('BASE', ['']):
         if cfg:
             _update_config_from_file(
@@ -234,8 +231,6 @@ def update_config(config, args):
         config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
     if args.use_checkpoint:
         config.TRAIN.USE_CHECKPOINT = True
-    if args.amp_opt_level:
-        config.AMP_OPT_LEVEL = args.amp_opt_level
     if args.output:
         config.OUTPUT = args.output
     if args.tag:
@@ -248,13 +243,11 @@ def update_config(config, args):
         config.THROUGHPUT_MODE = True
     if args.sampler:
         config.TRAIN.SAMPLER = args.sampler
-    if args.amp:
-        config.USE_AMP = True
 
-        
+
     if args.num_workers is not None:
         config.DATA.NUM_WORKERS = args.num_workers
-        
+
     #set lr and weight decay
     if args.lr is not None:
         config.TRAIN.BASE_LR = args.lr
@@ -275,9 +268,6 @@ def update_config(config, args):
         config.TRAIN.LR_SCHEDULER.NAME = args.lr_scheduler_name
     if args.pretrain is not None:
         config.MODEL.PRETRAINED = args.pretrain
-
-    # set local rank for distributed training
-    config.LOCAL_RANK = args.local_rank
 
     # output folder
     config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG, str(config.VERSION))

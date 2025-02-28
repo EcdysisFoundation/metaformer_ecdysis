@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from PIL import Image
-from halo import Halo
 
 from . import LOGGING_LEVEL, INFO
 
@@ -52,12 +51,12 @@ def drop_identical_images(data: pd.DataFrame):
         data['hash'] = None
 
     num_starting_images = len(data)
-    with Halo(text=f'Removing duplicates, {num_starting_images} images to check', spinner='dots') as spinner:
-        null_hash_mask = data['hash'].isnull()
-        data.loc[null_hash_mask, 'hash'] = data.loc[null_hash_mask, 'image'].apply(get_md5_hash)
-        data[['image', 'hash']].to_csv('.cache/hashes.csv', index=False)
-        output = data.drop_duplicates(subset=['hash'])
-        spinner.succeed(f'---------Dropped {num_starting_images - len(output)} duplicated images---------')
+    logger.info('Removing duplicates, {0} images to check'.format(num_starting_images))
+    null_hash_mask = data['hash'].isnull()
+    data.loc[null_hash_mask, 'hash'] = data.loc[null_hash_mask, 'image'].apply(get_md5_hash)
+    data[['image', 'hash']].to_csv('.cache/hashes.csv', index=False)
+    output = data.drop_duplicates(subset=['hash'])
+    logger.info(f'---------Dropped {num_starting_images - len(output)} duplicated images---------')
 
     return output
 

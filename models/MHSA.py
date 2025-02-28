@@ -1,9 +1,8 @@
 import math
 import torch
 import torch.nn as nn
+from timm.layers import to_2tuple, trunc_normal_, DropPath
 from torch.nn import functional as F
-import numpy as np
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -21,7 +20,7 @@ class Mlp(nn.Module):
         x = self.drop(x)
         x = self.fc2(x)
         x = self.drop(x)
-        return x      
+        return x
 class DWConv(nn.Module):
     def __init__(self, dim=768):
         super(DWConv, self).__init__()
@@ -45,7 +44,7 @@ class Relative_Attention(nn.Module):
          # define a parameter table of relative position bias,add cls_token bias
         self.relative_position_bias_table = nn.Parameter(
             torch.zeros((2 * img_size[0] - 1) * (2 * img_size[1] - 1) + 1, num_heads))  # 2*h-1 * 2*w-1 + 1, nH
-        
+
         # get pair-wise relative position index for each token
         coords_h = torch.arange(self.img_size[0])
         coords_w = torch.arange(self.img_size[1])
@@ -80,12 +79,12 @@ class Relative_Attention(nn.Module):
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.img_size[0] * self.img_size[1] + self.extra_token_num, self.img_size[0] * self.img_size[1] + self.extra_token_num, -1)  # h*w+1,h*w+1,nH
-        
+
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, h*w+1, h*w+1
         attn = attn + relative_position_bias.unsqueeze(0)
 
         attn = self.softmax(attn)
-        
+
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
@@ -127,7 +126,7 @@ class OverlapPatchEmbed(nn.Module):
         x = x.flatten(2).transpose(1, 2)
         x = self.norm(x)
 
-        return x, H, W        
+        return x, H, W
 class MHSABlock(nn.Module):
     def __init__(self, input_dim, output_dim,image_size, stride, num_heads,extra_token_num=1,mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
@@ -139,7 +138,7 @@ class MHSABlock(nn.Module):
             self.patch_embed = None
             self.img_size = image_size
         self.img_size = to_2tuple(self.img_size)
-        
+
         self.norm1 = norm_layer(output_dim)
         self.attn = Relative_Attention(
             output_dim,self.img_size, extra_token_num=extra_token_num,num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
