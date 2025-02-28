@@ -14,4 +14,3 @@ dependencies:
     - yacs
     - termcolor
     - scikit-learn
-    - halo
