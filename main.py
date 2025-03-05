@@ -200,13 +200,16 @@ def main(config):
                 pbar.set_postfix_str(f'Maximum accuracy on validation so far: {max_accuracy:.3f}%')
                 # Save best checkpoint
                 if dist.get_rank() == 0:
+                    logger.info("Saving checkpoint A")
                     save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, 'best')
 
             if dist.get_rank() == 0:
                 # Save periodic checkpoint
                 if epoch % config.SAVE_FREQ == 0:
+                    logger.info("Saving checkpoint B")
                     save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'epoch_{epoch}')
                 # Save latest checkpoint
+                logger.info("Saving checkpoint C")
                 save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
 
             if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
@@ -352,52 +355,53 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
     pbar_desc = f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]'
 
     with tqdm(desc=pbar_desc, total=len(data_loader), unit='batch') as pbar:
-        for idx, data in enumerate(data_loader):
-            if config.DATA.ADD_META:
-                images,target,meta = data
-                meta = [m.float() for m in meta]
-                meta = torch.stack(meta,dim=0)
-                if mask_meta:
-                    meta = torch.zeros_like(meta)
-                meta = meta.cuda(non_blocking=True)
-            else:
-                images, target = data
-                meta = None
-
-            images = images.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-
-            with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with model.join():
+            for idx, data in enumerate(data_loader):
                 if config.DATA.ADD_META:
-                    output = model(images, meta)
+                    images,target,meta = data
+                    meta = [m.float() for m in meta]
+                    meta = torch.stack(meta,dim=0)
+                    if mask_meta:
+                        meta = torch.zeros_like(meta)
+                    meta = meta.cuda(non_blocking=True)
                 else:
-                    output = model(images)
+                    images, target = data
+                    meta = None
 
-                # measure accuracy and record loss
-                loss = criterion(output, target)
-                acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
+                images = images.cuda(non_blocking=True)
+                target = target.cuda(non_blocking=True)
 
-                acc1 = reduce_tensor(acc1)
-                acc5 = reduce_tensor(acc5)
-                loss = reduce_tensor(loss)
+                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    if config.DATA.ADD_META:
+                        output = model(images, meta)
+                    else:
+                        output = model(images)
 
-                loss_meter.update(loss.item(), target.size(0))
-                acc1_meter.update(acc1.item(), target.size(0))
-                acc5_meter.update(acc5.item(), target.size(0))
+                    # measure accuracy and record loss
+                    loss = criterion(output, target)
+                    acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
-            batch_time.update(time.time() - end)
-            end = time.time()
+                    acc1 = reduce_tensor(acc1)
+                    acc5 = reduce_tensor(acc5)
+                    loss = reduce_tensor(loss)
 
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
+                    loss_meter.update(loss.item(), target.size(0))
+                    acc1_meter.update(acc1.item(), target.size(0))
+                    acc5_meter.update(acc5.item(), target.size(0))
 
-            pbar.update()
-            pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
+                batch_time.update(time.time() - end)
+                end = time.time()
 
-    if tb_logger is not None:
-        step = epoch
-        tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
+                memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
 
-    return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
+                pbar.update()
+                pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
+
+        if tb_logger is not None:
+            step = epoch
+            tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
+
+        return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
 def test(config, data_loader, model):
@@ -467,7 +471,7 @@ def setup_distributed(config):
     world_size = int(os.environ['WORLD_SIZE'])
     print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
     torch.cuda.device(int(os.environ["LOCAL_RANK"]))
-    torch.distributed.init_process_group(
+    dist.init_process_group(
         backend='nccl',
         init_method='env://',
         timeout = datetime.timedelta(seconds=1800),
