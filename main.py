@@ -95,7 +95,7 @@ def parse_option():
 
 
 def main(config):
-
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
