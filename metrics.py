@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
-from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, ConfusionMatrix, MetricCollection
+from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, MetricCollection
 from yacs.config import CfgNode
 
 from datetime import datetime
@@ -112,7 +112,7 @@ def log_metrics(logger: logging.Logger, metrics: MetricCollection, aggregation: 
     Returns:
 
     """
-    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['StatScores', 'ConfusionMatrix'])
+    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['MulticlassStatScores'])
     logger.info(f'{aggregation.title()} metrics:\n\t{metrics_string}')
 
 

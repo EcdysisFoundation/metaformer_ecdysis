@@ -19,7 +19,6 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
-#from models import build_model
 from models.build import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -111,9 +110,6 @@ def main(config):
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
 
-    metrics = get_model_metrics(config)
-    model.metrics = metrics  # This need to be here to avoid problems with distributed training
-
     model = model.cuda()
 
     scaler = torch.amp.GradScaler('cuda', enabled=False)
@@ -132,7 +128,7 @@ def main(config):
     if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
         #breakpoint()
-        validate(config, data_loader_test, model, 0, metrics)
+        validate(config, data_loader_test, model, 0)
         return
 
     if hasattr(model_without_ddp, 'flops'):
@@ -164,11 +160,11 @@ def main(config):
     if config.MODEL.RESUME:
         logger.info(f"**********normal test***********")
         max_accuracy = load_checkpoint(config, model_without_ddp, optimizer, lr_scheduler, logger)
-        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, metrics)
+        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
         if config.DATA.ADD_META:
             logger.info(f"**********mask meta test***********")
-            acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, metrics, mask_meta=True)
+            acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
             logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
         if config.EVAL_MODE:
             return
@@ -196,9 +192,9 @@ def main(config):
 
             # Validate
             if config.DATA.ADD_META:
-                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, mask_meta=True, tb_logger=writer)
             else:
-                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, tb_logger=writer)
 
             if acc1 > max_accuracy:
                 max_accuracy = acc1
@@ -330,7 +326,7 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
 
 @torch.no_grad()
-def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
+def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None):
     """
     Compute metrics on validation or test sets
     Args:
@@ -346,6 +342,8 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
     """
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
+
+    metrics = get_model_metrics(config)
 
     batch_time = AverageMeter()
     loss_meter = AverageMeter()
@@ -385,11 +383,12 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 loss = criterion(output, target)
                 acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
-                metric.update(output, target)
-
                 acc1 = reduce_tensor(acc1)
                 acc5 = reduce_tensor(acc5)
                 loss = reduce_tensor(loss)
+
+                torch.cuda.synchronize()
+                metrics.update(output, target)
 
                 loss_meter.update(loss.item(), target.size(0))
                 acc1_meter.update(acc1.item(), target.size(0))
@@ -402,7 +401,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             pbar.update()
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
-    epoch_metric = metric.compute()
+    epoch_metric = metrics.compute()
 
     if tb_logger is not None:
         step = epoch
@@ -413,13 +412,13 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
         display = 3 # how many entries to display for debug purposes
         logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
+        stats = get_stats(metrics, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
         print('stats' + str(len(stats)))
         log_metrics(logger, epoch_metric, 'test')
         logger.info(f"Statistics per class:\n{stats}")
         dump_summary(epoch_metric, config, dump=True)
 
-    metric.reset()  # Do not accumulate over epochs
+    metrics.reset()  # Do not accumulate over epochs
 
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
