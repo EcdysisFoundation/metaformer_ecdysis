@@ -136,12 +136,12 @@ root/
 
 ### Tensorboard
 
-Training and validation metrics are saved to tensorboard by default. To run the Tensorboard server on a particular model
+Training and validation metrics are saved to a directory called tensorboard. To view these, download the directory, and run the Tensorboard server to view. You will need a local environment with tensorboard installed, then following command where tensorboard is the path to the tensorboard directory.
 execute
 ```commandline
-tensorboard --logdir output/ecdysis/model-name/tensorboard --bind_all
+tensorboard --logdir tensorboard --bind_all
 ```
-then open a browser and go to [](host-or-ip:6006)
+then open a browser and go to to the local computer url indicated on the command line
 
 ## Origination
 
