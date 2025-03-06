@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import pandas as pd
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
@@ -48,16 +49,15 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     if 'MulticlassStatScores' in metrics.keys():
         stats = metrics['MulticlassStatScores']
         tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
-        tpfp = tp + fp
-        tpfn = tp + fn
-        f1denom = 2*tp + fp + fn
-        return {'TP': tp,
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return {
+                'TP': tp,
                 'FP': fp,
                 'TN': tn,
                 'FN': fn,
-                'Precision': tp / tpfp if tpfp else 'undefined',
-                'Recall': tp / tpfn if tpfn else 'undefined',
-                'F1': 2*tp / f1denom if f1denom else 'undefined',
+                'Precision': tp / (tp + fp),
+                'Recall': tp / (tp + fn),
+                'F1': 2*tp / (2*tp + fp + fn),
                 total_column_name: tp + fn
             }
     else:
