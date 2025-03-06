@@ -36,7 +36,7 @@ DATASET="bugbox_model_${THIS_VERSION}"
 # using ecdysis_test.yml
 /home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis_test.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
-  --pretrain "output/ecdysis/morphospecies/${DEPLOYED_VERSION}/best.pth" --ignore-user-warnings >/dev/null  # only show error messages
+  --pretrain "output/ecdysis/morphospecies/${DEPLOYED_VERSION}/best.pth" >/dev/null
 wait
 # Evaluate trained model
 /home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
