@@ -48,14 +48,16 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     if 'MulticlassStatScores' in metrics.keys():
         stats = metrics['MulticlassStatScores']
         tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
-
+        tpfp = tp + fp
+        tpfn = tp + fn
+        f1denom = 2*tp + fp + fn
         return {'TP': tp,
                 'FP': fp,
                 'TN': tn,
                 'FN': fn,
-                'Precision': tp / (tp + fp),
-                'Recall': tp / (tp + fn),
-                'F1': 2*tp / (2*tp + fp + fn),
+                'Precision': tp / tpfp if tpfp else 'undefined',
+                'Recall': tp / tpfn if tpfn else 'undefined',
+                'F1': 2*tp / f1denom if f1denom else 'undefined',
                 total_column_name: tp + fn
             }
     else:
