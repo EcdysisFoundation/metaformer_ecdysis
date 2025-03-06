@@ -41,7 +41,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     """
     if 'MulticlassStatScores' in metrics.keys():
         stats = metrics['MulticlassStatScores']
-        tp, fp, tn, fn = stats.tp.numpy(), stats.fp.numpy(), stats.tn.numpy(), stats.fn.numpy()
+        tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
 
         return {'TP': tp,
                 'FP': fp,
