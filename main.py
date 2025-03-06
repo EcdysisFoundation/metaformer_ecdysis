@@ -189,8 +189,7 @@ def main(config):
             if config.DATA.ADD_META:
                 acc1, acc5, loss = validate(config, data_loader_val, model, epoch, mask_meta=True, tb_logger=writer)
             else:
-                acc1 = 9.9 # temporarily skip validate
-                #acc1, acc5, loss = validate(config, data_loader_val, model, epoch, tb_logger=writer)
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, tb_logger=writer)
 
             if acc1 > max_accuracy:
                 max_accuracy = acc1
