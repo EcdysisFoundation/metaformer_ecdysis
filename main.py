@@ -3,7 +3,6 @@ import os
 import time
 import argparse
 import datetime
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -392,11 +391,13 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
             pbar.update()
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
-        if tb_logger is not None:
-            step = epoch
-            tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
+        torch.cuda.synchronize()
 
-        return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
+    if tb_logger is not None:
+        step = epoch
+        tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
+
+    return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
 def test(config, data_loader, model):
