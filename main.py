@@ -507,10 +507,11 @@ if __name__ == '__main__':
 
     main(config)
 
-    dist.barrier()
-    dist.destroy_process_group()
-
     if dist.get_rank() == 0 and not config.EVAL_MODE:
         path = os.path.join(config.OUTPUT, "config.yaml")
         with open(path, "w") as f:
             f.write(config.dump())
+
+    dist.barrier()
+    dist.destroy_process_group()
+    # La fin
