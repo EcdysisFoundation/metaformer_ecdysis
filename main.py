@@ -403,6 +403,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
 def test(config, data_loader, model):
     model.eval()
     metrics = get_model_metrics(config)
+    metrics = metrics.to(torch.device(int(os.environ["LOCAL_RANK"])))
     pbar_desc = f'Testing | Rank {dist.get_rank()}'
 
     with tqdm(desc=pbar_desc, total=len(data_loader), unit='batch') as pbar:
@@ -425,7 +426,7 @@ def test(config, data_loader, model):
                 else:
                     output = model(images)
 
-                metrics.update(output.cpu(), target.cpu())
+                metrics.update(output, target)
             pbar.update()
 
     epoch_metric = metrics.compute()
