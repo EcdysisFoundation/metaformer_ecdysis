@@ -20,13 +20,13 @@ def get_model_metrics(config: CfgNode):
 
     Returns: torchmetrics collection
     """
-    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro'),
-               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro')]
+    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro', compute_on_cpu=True),
+               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True),
+               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True),
+               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True)]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'))
+        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True))
 
     return MetricCollection(metrics)
 
@@ -41,7 +41,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     """
     if 'MulticlassStatScores' in metrics.keys():
         stats = metrics['MulticlassStatScores']
-        tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
+        tp, fp, tn, fn = stats.tp.numpy(), stats.fp.numpy(), stats.tn.numpy(), stats.fn.numpy()
 
         return {'TP': tp,
                 'FP': fp,
