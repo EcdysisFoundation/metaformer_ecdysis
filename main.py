@@ -425,7 +425,7 @@ def test(config, data_loader, model):
                 else:
                     output = model(images)
 
-                metrics.update(output, target)
+                metrics.update(output.cpu(), target.cpu())
             pbar.update()
 
     epoch_metric = metrics.compute()
