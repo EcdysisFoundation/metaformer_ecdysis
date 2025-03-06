@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
-from torchmetrics import (
+from torchmetrics import MetricCollection
+from torchmetrics.classification import (
     MulticlassAccuracy,
     MulticlassPrecision,
     MulticlassRecall,
     MulticlassF1Score,
-    MulticlassStatScores,
-    MetricCollection)
+    MulticlassStatScores)
 from yacs.config import CfgNode
 
 from datetime import datetime
