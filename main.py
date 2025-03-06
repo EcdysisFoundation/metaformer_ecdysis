@@ -84,9 +84,6 @@ def parse_option():
 
     parser.add_argument('--version', type=str, help='Version to tag trained model')
 
-    parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
-                        help='Disable logging of UserWarnings')
-
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
@@ -95,7 +92,6 @@ def parse_option():
 
 
 def main(config):
-    torch.cuda.device(int(os.environ["LOCAL_RANK"]))
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -470,7 +466,7 @@ def setup_distributed(config):
     rank = int(os.environ["RANK"])
     world_size = int(os.environ['WORLD_SIZE'])
     print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
-    torch.cuda.device(int(os.environ["LOCAL_RANK"]))
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
     dist.init_process_group(
         backend='nccl',
         init_method='env://',
@@ -487,9 +483,6 @@ if __name__ == '__main__':
 
     args, config = parse_option()
     logging.basicConfig(level=logging.INFO)
-
-    if args.ignore_user_warnings:
-        warnings.filterwarnings('ignore', category=UserWarning)
 
     setup_distributed(config)
     print(config.OUTPUT)
@@ -514,6 +507,7 @@ if __name__ == '__main__':
 
     main(config)
 
+    dist.barrier()
     dist.destroy_process_group()
 
     if dist.get_rank() == 0 and not config.EVAL_MODE:
