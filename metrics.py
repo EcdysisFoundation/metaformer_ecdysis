@@ -20,13 +20,13 @@ def get_model_metrics(config: CfgNode):
 
     Returns: torchmetrics collection
     """
-    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro', compute_on_cpu=True),
-               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True),
-               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True),
-               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True)]
+    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro'),
+               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro')]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro', compute_on_cpu=True))
+        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'))
 
     return MetricCollection(metrics)
 
