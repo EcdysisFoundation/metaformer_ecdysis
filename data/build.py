@@ -7,7 +7,6 @@
 
 from pathlib import Path
 
-import math
 import torch
 import numpy as np
 import torch.distributed as dist
