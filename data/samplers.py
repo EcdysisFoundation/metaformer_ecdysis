@@ -5,6 +5,7 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 import math
+import np
 
 import torch
 import torch.distributed as dist
@@ -12,15 +13,30 @@ import torch.distributed as dist
 class SubsetRandomSampler(torch.utils.data.Sampler):
     r"""Samples elements randomly from a given list of indices, without replacement.
 
-    Arguments:
-        indices (sequence): a sequence of indices
+    Modified from original to to make it evenly divisible for torch.distributed.
     """
 
-    def __init__(self, indices):
+    def __init__(self, dataset, num_replicas=None, rank=None):
+        if num_replicas is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            rank = dist.get_rank()
+        self.dataset = dataset
         self.epoch = 0
-        self.indices = indices
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.indices = np.arange(rank, len(self.dataset), num_replicas)
+        self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
+        self.total_size = self.num_samples * self.num_replicas
 
     def __iter__(self):
+        # add extra samples to make it evenly divisible
+        self.indices += self.indices[:(self.total_size - len(self.indices))]
+        assert len(self.indices) == self.total_size
         return (self.indices[i] for i in torch.randperm(len(self.indices)))
 
     def __len__(self):
