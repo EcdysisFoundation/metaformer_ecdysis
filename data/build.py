@@ -21,7 +21,7 @@ from logger import create_logger
 from .samplers import SubsetRandomSampler, DistributedWeightedSampler
 
 
-def build_loader(config, pad_sampler=True):
+def build_loader(config):
 
     config.defrost()
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=__name__,
