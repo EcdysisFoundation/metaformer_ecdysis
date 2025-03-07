@@ -207,8 +207,6 @@ def main(config):
                 logger.info("Saving checkpoint C")
                 save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
 
-            dist.barrier()
-
             if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
                 logger.info(f"Early stopping at epoch {epoch}")
                 break
@@ -471,7 +469,7 @@ def setup_distributed(config):
     dist.init_process_group(
         backend='nccl',
         init_method='env://',
-        timeout = datetime.timedelta(seconds=1800),
+        timeout = datetime.timedelta(seconds=900),
         world_size=world_size,
         rank=rank)
     seed = config.SEED + dist.get_rank()

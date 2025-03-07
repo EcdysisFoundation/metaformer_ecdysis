@@ -7,6 +7,7 @@
 
 from pathlib import Path
 
+import math
 import torch
 import numpy as np
 import torch.distributed as dist
@@ -18,11 +19,10 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
-from .cached_image_folder import CachedImageFolder
 from .samplers import SubsetRandomSampler, DistributedWeightedSampler
 
 
-def build_loader(config):
+def build_loader(config, pad_sampler=True):
 
     config.defrost()
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=__name__,
@@ -64,7 +64,16 @@ def build_loader(config):
                     dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
                 )
 
+        # sampler_val with handling for potential of uneven number of batches
         indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
+        num_samples = len(indices)
+        max_batches = math.ceil(num_samples / (num_tasks * config.DATA.BATCH_SIZE))
+        if pad_sampler:
+            # NOTE: if padding the sample, will need be sure to account for that in validation loop
+            # potential of IndexError in that case
+            total_samples_needed = max_batches * num_tasks * config.DATA.BATCH_SIZE
+            if total_samples_needed > num_samples:
+                indices = list(indices) + [indices[0]] * (total_samples_needed - num_samples)
         sampler_val = SubsetRandomSampler(indices)
 
         data_loader_train = torch.utils.data.DataLoader(
