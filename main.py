@@ -207,6 +207,8 @@ def main(config):
                 logger.info("Saving checkpoint C")
                 save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
 
+            dist.barrier()
+
             if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
                 logger.info(f"Early stopping at epoch {epoch}")
                 break
@@ -390,8 +392,6 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
 
             pbar.update()
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
-
-        torch.cuda.synchronize()
 
     if tb_logger is not None:
         step = epoch
