@@ -3,7 +3,6 @@ import os
 import time
 import argparse
 import datetime
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +18,6 @@ from tqdm import tqdm
 from callbacks import EarlyStopper
 from config import get_config
 from metrics import get_model_metrics, get_stats, log_metrics, dump_summary
-#from models import build_model
 from models.build import build_model
 from data import build_loader
 from lr_scheduler import build_scheduler
@@ -85,9 +83,6 @@ def parse_option():
 
     parser.add_argument('--version', type=str, help='Version to tag trained model')
 
-    parser.add_argument('--ignore-user-warnings', action='store_true', default=False,
-                        help='Disable logging of UserWarnings')
-
     args, unparsed = parser.parse_known_args()
 
     config = get_config(args)
@@ -96,7 +91,6 @@ def parse_option():
 
 
 def main(config):
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  # needed because cuda hangs without it.
     if config.EVAL_MODE:
         logger.info(f"Running in eval mode")
         if config.MODEL.PRETRAINED:
@@ -111,10 +105,7 @@ def main(config):
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
 
-    metrics = get_model_metrics(config)
-    model.metrics = metrics  # This need to be here to avoid problems with distributed training
-
-    model = model.cuda()
+    model.cuda()
 
     scaler = torch.amp.GradScaler('cuda', enabled=False)
 
@@ -131,8 +122,7 @@ def main(config):
 
     if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
-        #breakpoint()
-        validate(config, data_loader_test, model, 0, metrics)
+        test(config, data_loader_test, model)
         return
 
     if hasattr(model_without_ddp, 'flops'):
@@ -164,11 +154,11 @@ def main(config):
     if config.MODEL.RESUME:
         logger.info(f"**********normal test***********")
         max_accuracy = load_checkpoint(config, model_without_ddp, optimizer, lr_scheduler, logger)
-        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, metrics)
+        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
         if config.DATA.ADD_META:
             logger.info(f"**********mask meta test***********")
-            acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, metrics, mask_meta=True)
+            acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
             logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
         if config.EVAL_MODE:
             return
@@ -181,37 +171,40 @@ def main(config):
     tb_dir = Path(config.OUTPUT) / 'tensorboard'
     tb_dir.mkdir(exist_ok=True)
     writer = SummaryWriter(log_dir=tb_dir)
+
     # Early stopping
     stopper = EarlyStopper(patience=config.TRAIN.EARLY_STOP.PATIENCE, min_delta=config.TRAIN.EARLY_STOP.MIN_DELTA)
-    #breakpoint()
+
     start_time = time.time()
     with tqdm(desc=f'Training | Rank {dist.get_rank()}', total=config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1,
               unit='epoch', initial=config.TRAIN.START_EPOCH) as pbar:
         for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
             # Train
-
             data_loader_train.sampler.set_epoch(epoch)
             train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
                                        lr_scheduler, scaler, writer)
 
             # Validate
             if config.DATA.ADD_META:
-                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, mask_meta=True, tb_logger=writer)
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, mask_meta=True, tb_logger=writer)
             else:
-                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, metrics, tb_logger=writer)
+                acc1, acc5, loss = validate(config, data_loader_val, model, epoch, tb_logger=writer)
 
             if acc1 > max_accuracy:
                 max_accuracy = acc1
                 pbar.set_postfix_str(f'Maximum accuracy on validation so far: {max_accuracy:.3f}%')
                 # Save best checkpoint
                 if dist.get_rank() == 0:
+                    logger.info("Saving checkpoint A")
                     save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, 'best')
 
             if dist.get_rank() == 0:
                 # Save periodic checkpoint
                 if epoch % config.SAVE_FREQ == 0:
+                    logger.info("Saving checkpoint B")
                     save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'epoch_{epoch}')
                 # Save latest checkpoint
+                logger.info("Saving checkpoint C")
                 save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
 
             if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
@@ -252,7 +245,6 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
     pbar_description = f'Training | Rank {dist.get_rank()} | ' \
                        f'Epoch [{epoch}/{config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS - 1}]'
     with tqdm(desc=pbar_description, total=len(data_loader), unit='batch') as pbar:
-
         for idx, data in enumerate(data_loader):
 
             if idx == 0:
@@ -266,8 +258,9 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
                 meta = torch.stack(meta,dim=0)
                 meta = meta.cuda(non_blocking=True)
             else:
-                samples, targets= data
+                samples, targets = data
                 meta = None
+
             samples = samples.cuda(non_blocking=True)
             targets = targets.cuda(non_blocking=True)
 
@@ -276,12 +269,12 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
                 if config.DATA.ADD_META:
-
                     outputs = model(samples, meta)
                 else:
                     outputs = model(samples)
+
                 loss = criterion(outputs, targets)
-            print('arrived at config.train_accumulation')
+
             if config.TRAIN.ACCUMULATION_STEPS > 1:
                 loss = loss / config.TRAIN.ACCUMULATION_STEPS
                 scaler.scale(loss).backward()
@@ -330,9 +323,9 @@ def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer,
 
 
 @torch.no_grad()
-def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logger=None):
+def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None):
     """
-    Compute metrics on validation or test sets
+    Compute metrics on validation
     Args:
         config: Configuration object
         data_loader: Validation or test data loader
@@ -354,10 +347,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
 
     end = time.time()
 
-    if config.EVAL_MODE:
-        pbar_desc = f'Testing | Rank {dist.get_rank()}'
-    else:
-        pbar_desc = f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]'
+    pbar_desc = f'Validating | Rank {dist.get_rank()} | Epoch [{epoch}/{config.TRAIN.EPOCHS}]'
 
     with tqdm(desc=pbar_desc, total=len(data_loader), unit='batch') as pbar:
         for idx, data in enumerate(data_loader):
@@ -385,8 +375,6 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 loss = criterion(output, target)
                 acc1, acc5 = accuracy(output, target, topk=(1, min(5, config.MODEL.NUM_CLASSES)))
 
-                metric.update(output, target)
-
                 acc1 = reduce_tensor(acc1)
                 acc5 = reduce_tensor(acc5)
                 loss = reduce_tensor(loss)
@@ -394,6 +382,7 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
                 loss_meter.update(loss.item(), target.size(0))
                 acc1_meter.update(acc1.item(), target.size(0))
                 acc5_meter.update(acc5.item(), target.size(0))
+
             batch_time.update(time.time() - end)
             end = time.time()
 
@@ -402,26 +391,54 @@ def validate(config, data_loader, model, epoch, metric, mask_meta=False, tb_logg
             pbar.update()
             pbar.set_postfix_str(f'Memory {memory_used:.0f}MB')
 
-    epoch_metric = metric.compute()
-
     if tb_logger is not None:
         step = epoch
         tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
-        tb_logger.add_scalars('val/metrics', epoch_metric, global_step=step)
-
-    if config.EVAL_MODE and dist.get_rank() == 0:
-
-        display = 3 # how many entries to display for debug purposes
-        logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-        stats = get_stats(metric, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
-        print('stats' + str(len(stats)))
-        log_metrics(logger, epoch_metric, 'test')
-        logger.info(f"Statistics per class:\n{stats}")
-        dump_summary(epoch_metric, config, dump=True)
-
-    metric.reset()  # Do not accumulate over epochs
 
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
+
+
+def test(config, data_loader, model):
+    model.eval()
+    metrics = get_model_metrics(config)
+    metrics = metrics.to(torch.device(int(os.environ["LOCAL_RANK"])))
+    pbar_desc = f'Testing | Rank {dist.get_rank()}'
+
+    with tqdm(desc=pbar_desc, total=len(data_loader), unit='batch') as pbar:
+        for idx, data in enumerate(data_loader):
+            if config.DATA.ADD_META:
+                images, target, meta = data
+                meta = [m.float() for m in meta]
+                meta = torch.stack(meta,dim=0)
+                meta = meta.cuda(non_blocking=True)
+            else:
+                images, target = data
+                meta = None
+
+            images = images.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                if config.DATA.ADD_META:
+                    output = model(images, meta)
+                else:
+                    output = model(images)
+
+                metrics.update(output, target)
+            pbar.update()
+
+    epoch_metric = metrics.compute()
+
+    display = 3 # how many entries to display for debug purposes
+    logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
+    stats = get_stats(metrics, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
+    print('stats' + str(len(stats)))
+    log_metrics(logger, epoch_metric, 'test')
+    logger.info(f"Statistics per class:\n{stats}")
+    dump_summary(epoch_metric, config, dump=True)
+
+    metrics.reset()
+    return
 
 
 @torch.no_grad()
@@ -448,11 +465,11 @@ def setup_distributed(config):
     rank = int(os.environ["RANK"])
     world_size = int(os.environ['WORLD_SIZE'])
     print(f"RANK and WORLD_SIZE in environ: {rank}/{world_size}")
-    torch.cuda.device(int(os.environ["LOCAL_RANK"]))
-    torch.distributed.init_process_group(
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+    dist.init_process_group(
         backend='nccl',
         init_method='env://',
-        timeout = datetime.timedelta(seconds=1800),
+        timeout = datetime.timedelta(seconds=900),
         world_size=world_size,
         rank=rank)
     seed = config.SEED + dist.get_rank()
@@ -465,9 +482,6 @@ if __name__ == '__main__':
 
     args, config = parse_option()
     logging.basicConfig(level=logging.INFO)
-
-    if args.ignore_user_warnings:
-        warnings.filterwarnings('ignore', category=UserWarning)
 
     setup_distributed(config)
     print(config.OUTPUT)
@@ -496,3 +510,7 @@ if __name__ == '__main__':
         path = os.path.join(config.OUTPUT, "config.yaml")
         with open(path, "w") as f:
             f.write(config.dump())
+
+    dist.barrier()
+    dist.destroy_process_group()
+    # La fin

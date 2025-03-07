@@ -18,7 +18,6 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
-from .cached_image_folder import CachedImageFolder
 from .samplers import SubsetRandomSampler, DistributedWeightedSampler
 
 

@@ -3,8 +3,15 @@ import logging
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import pandas as pd
-from torchmetrics import Accuracy, Precision, Recall, F1Score, StatScores, ConfusionMatrix, MetricCollection
+from torchmetrics import MetricCollection
+from torchmetrics.classification import (
+    MulticlassAccuracy,
+    MulticlassPrecision,
+    MulticlassRecall,
+    MulticlassF1Score,
+    MulticlassStatScores)
 from yacs.config import CfgNode
 
 from datetime import datetime
@@ -20,13 +27,13 @@ def get_model_metrics(config: CfgNode):
 
     Returns: torchmetrics collection
     """
-    metrics = [Accuracy(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='micro'),
-               Precision(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               Recall(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'),
-               F1Score(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro')]
+    metrics = [MulticlassAccuracy(num_classes=config.MODEL.NUM_CLASSES, average='micro'),
+               MulticlassPrecision(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               MulticlassRecall(num_classes=config.MODEL.NUM_CLASSES, average='macro'),
+               MulticlassF1Score(num_classes=config.MODEL.NUM_CLASSES, average='macro')]
 
     if config.EVAL_MODE:
-        metrics.append(StatScores(task="multiclass", num_classes=config.MODEL.NUM_CLASSES, average='macro'))
+        metrics.append(MulticlassStatScores(num_classes=config.MODEL.NUM_CLASSES, average='macro'))
 
     return MetricCollection(metrics)
 
@@ -42,8 +49,9 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
     if 'MulticlassStatScores' in metrics.keys():
         stats = metrics['MulticlassStatScores']
         tp, fp, tn, fn = stats.tp.cpu().numpy(), stats.fp.cpu().numpy(), stats.tn.cpu().numpy(), stats.fn.cpu().numpy()
-
-        return {'TP': tp,
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return {
+                'TP': tp,
                 'FP': fp,
                 'TN': tn,
                 'FN': fn,
@@ -54,6 +62,7 @@ def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> d
             }
     else:
         # return zeros if MulticlassStatScores not entered, and print keys in case not as expected
+        print('MulticlassStatScores not in keys, check dictionary')
         print(metrics.keys())
         return {'TP': 0,
                 'FP': 0,
@@ -112,7 +121,7 @@ def log_metrics(logger: logging.Logger, metrics: MetricCollection, aggregation: 
     Returns:
 
     """
-    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['StatScores', 'ConfusionMatrix'])
+    metrics_string = ' | '.join(f'{m} = {v}' for m, v in metrics.items() if m not in ['MulticlassStatScores'])
     logger.info(f'{aggregation.title()} metrics:\n\t{metrics_string}')
 
 
@@ -127,10 +136,10 @@ def dump_summary(metrics: MetricCollection, config: CfgNode, dump: bool = False)
         'train_images': config.DATA.TRAIN_SAMPLES,
         'test_images': config.DATA.TEST_SAMPLES,
         'number_of_classes': config.MODEL.NUM_CLASSES,
-        'accuracy': round(metrics['Accuracy'].item(), 3),
-        'precision': round(metrics['Precision'].item(), 3),
-        'recall': round(metrics['Recall'].item(), 3),
-        'f1': round(metrics['F1Score'].item(), 3),
+        'accuracy': round(metrics['MulticlassAccuracy'].item(), 3),
+        'precision': round(metrics['MulticlassPrecision'].item(), 3),
+        'recall': round(metrics['MulticlassRecall'].item(), 3),
+        'f1': round(metrics['MulticlassF1Score'].item(), 3),
         'date': datetime.now().strftime("%Y-%m-%d")
     }
 
