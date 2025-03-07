@@ -66,14 +66,14 @@ def build_loader(config, pad_sampler=True):
 
         # sampler_val with handling for potential of uneven number of batches
         indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
-        num_samples = len(indices)
+        num_samples = len(dataset_val)
         max_batches = math.ceil(num_samples / (num_tasks * config.DATA.BATCH_SIZE))
         if pad_sampler:
             # NOTE: if padding the sample, will need be sure to account for that in validation loop
             # potential of IndexError in that case
             total_samples_needed = max_batches * num_tasks * config.DATA.BATCH_SIZE
-            if total_samples_needed > num_samples:
-                indices = list(indices) + [indices[0]] * (total_samples_needed - num_samples)
+            if total_samples_needed > len(indices):
+                indices = list(indices) + [indices[0]] * (total_samples_needed - len(indices))
         sampler_val = SubsetRandomSampler(indices)
 
         data_loader_train = torch.utils.data.DataLoader(
