@@ -8,7 +8,6 @@
 from pathlib import Path
 
 import torch
-import numpy as np
 import torch.distributed as dist
 from torchvision import datasets, transforms
 
@@ -62,7 +61,6 @@ def build_loader(config):
                     dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
                 )
 
-        # indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
         sampler_val = SubsetRandomSampler(dataset_val)
 
         data_loader_train = torch.utils.data.DataLoader(
