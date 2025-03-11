@@ -32,11 +32,13 @@ class SubsetRandomSampler(torch.utils.data.Sampler):
         self.indices = np.arange(rank, len(self.dataset), num_replicas)
         self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
         self.total_size = self.num_samples * self.num_replicas
+        # add extra samples to make it evenly divisible
+        diff_s_i = self.num_samples - len(self.indices)
+        if diff_s_i:
+            self.indices += self.indices[:diff_s_i]
+        assert len(self.indices) == self.num_samples
 
     def __iter__(self):
-        # add extra samples to make it evenly divisible
-        self.indices += self.indices[:(self.total_size - len(self.indices))]
-        assert len(self.indices) == self.total_size
         return (self.indices[i] for i in torch.randperm(len(self.indices)))
 
     def __len__(self):
