@@ -18,7 +18,7 @@ def test_dataloader(config):
     dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
     print(len(data_loader_val))
 
-    pbar_desc = f'Testing | Rank {dist.get_rank()}'
+    pbar_desc = f'Testing data_loader_val | Rank {dist.get_rank()}'
 
     with tqdm(desc=pbar_desc, total=len(data_loader_val), unit='batch') as pbar:
         for idx, data in enumerate(data_loader_val):
