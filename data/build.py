@@ -3,6 +3,9 @@
 # Copyright (c) 2021 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
+#
+# this file has been modified from orginal
+#
 # --------------------------------------------------------
 
 from pathlib import Path
@@ -89,7 +92,6 @@ def build_loader(config):
                 prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
                 label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
 
-        #breakpoint()
         return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
 
 
