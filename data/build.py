@@ -3,12 +3,14 @@
 # Copyright (c) 2021 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
+#
+# this file has been modified from orginal
+#
 # --------------------------------------------------------
 
 from pathlib import Path
 
 import torch
-import numpy as np
 import torch.distributed as dist
 from torchvision import datasets, transforms
 
@@ -51,8 +53,7 @@ def build_loader(config):
         num_tasks = dist.get_world_size()
         global_rank = dist.get_rank()
         if config.DATA.ZIP_MODE and config.DATA.CACHE_MODE == 'part':
-            indices = np.arange(dist.get_rank(), len(dataset_train), dist.get_world_size())
-            sampler_train = SubsetRandomSampler(indices)
+           sampler_train = SubsetRandomSampler(dataset_train)
         else:
             if config.TRAIN.SAMPLER == 'weighted':
                 sampler_train = DistributedWeightedSampler(
@@ -63,8 +64,7 @@ def build_loader(config):
                     dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
                 )
 
-        indices = np.arange(dist.get_rank(), len(dataset_val), dist.get_world_size())
-        sampler_val = SubsetRandomSampler(indices)
+        sampler_val = SubsetRandomSampler(dataset_val)
 
         data_loader_train = torch.utils.data.DataLoader(
             dataset_train, sampler=sampler_train,
@@ -92,7 +92,6 @@ def build_loader(config):
                 prob=config.AUG.MIXUP_PROB, switch_prob=config.AUG.MIXUP_SWITCH_PROB, mode=config.AUG.MIXUP_MODE,
                 label_smoothing=config.MODEL.LABEL_SMOOTHING, num_classes=config.MODEL.NUM_CLASSES)
 
-        #breakpoint()
         return dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn
 
 

@@ -3,8 +3,12 @@
 # Copyright (c) 2021 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
+#
+# this file has been modified from orginal
+#
 # --------------------------------------------------------
 import math
+import numpy as np
 
 import torch
 import torch.distributed as dist
@@ -12,13 +16,30 @@ import torch.distributed as dist
 class SubsetRandomSampler(torch.utils.data.Sampler):
     r"""Samples elements randomly from a given list of indices, without replacement.
 
-    Arguments:
-        indices (sequence): a sequence of indices
+    Modified from original to to make it evenly divisible for torch.distributed.
     """
 
-    def __init__(self, indices):
+    def __init__(self, dataset, num_replicas=None, rank=None):
+        if num_replicas is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            rank = dist.get_rank()
+        self.dataset = dataset
         self.epoch = 0
-        self.indices = indices
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.indices = np.arange(rank, len(self.dataset), num_replicas)
+        self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
+        self.total_size = self.num_samples * self.num_replicas
+        # add extra samples if needed to make it evenly divisible
+        diff_s_i = self.num_samples - len(self.indices)
+        if diff_s_i > 0:
+            self.indices = np.insert(self.indices, self.indices[:diff_s_i], 0)
+        assert len(self.indices) == self.num_samples
 
     def __iter__(self):
         return (self.indices[i] for i in torch.randperm(len(self.indices)))

@@ -33,8 +33,7 @@ DATASET="bugbox_model_${THIS_VERSION}"
 
 
 # Run training starting from last best checkpoint
-# using ecdysis_test.yml
-/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis_test.yaml \
+/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis.yaml \
  --data-path "datasets/${DATASET}/" --tag "$1" --version "$THIS_VERSION" \
   --pretrain "output/ecdysis/morphospecies/${DEPLOYED_VERSION}/best.pth" >/dev/null
 wait

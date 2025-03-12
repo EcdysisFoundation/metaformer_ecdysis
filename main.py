@@ -393,6 +393,8 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
 
     if tb_logger is not None:
         step = epoch
+        tb_logger.add_scalar('val/acc1', acc1_meter.avg, global_step=step)
+        tb_logger.add_scalar('val/acc5', acc5_meter.avg, global_step=step)
         tb_logger.add_scalar('val/loss', loss_meter.avg, global_step=step)
 
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
