@@ -12,5 +12,4 @@ mkdir -p "${MODEL_PREFIX}/${THIS_VERSION}"
 
 cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
 cp "datasets/${DATASET}/morphospecies_map.csv" "${MODEL_PREFIX}/${THIS_VERSION}/morphospecies_map.csv"
-# when done with tests selection files, copy from the default location
-# cp "dataset_generation/training_selections.csv" "${MODEL_PREFIX}/${THIS_VERSION}/training_selections.csv"
+cp "dataset_generation/training_selections.csv" "${MODEL_PREFIX}/${THIS_VERSION}/training_selections.csv"
