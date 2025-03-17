@@ -4,7 +4,7 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
 #
-# this file has been modified from orginal
+# this file has been modified from original
 #
 # --------------------------------------------------------
 import math
