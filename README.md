@@ -28,7 +28,7 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 
 *usage*:
 ```commandline
-    conda activate metaformer
+    conda activate pytorch
 
     bash deploy/training.sh "DIRECTORY" "MODEL_NAME"
 ```
