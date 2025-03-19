@@ -1,2 +1,2 @@
-timm>=0.4.5
-yacs>=0.1.8
+timm
+yacs
