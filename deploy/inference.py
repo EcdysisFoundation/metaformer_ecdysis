@@ -64,7 +64,7 @@ class MetaformerInferencer:
         self.config = config
         self.class_names = self.config.DATA.CLASS_NAMES
         self.model = build_model(self.config).to(self.device)
-        checkpoint = torch.load(checkpoint, map_location=self.device)
+        checkpoint = torch.load(checkpoint, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint['model'], strict=False)
         self.model.eval()
         self.transform = self.make_transform()
