@@ -1,9 +1,8 @@
-from typing import List
-
 import pandas as pd
 
 MORPHOS_ID = 'morphos_id'
 MORPHOS_NAME = 'morphos_name'
+
 
 class BugBoxData:
 
@@ -27,5 +26,3 @@ class BugBoxData:
         morphospecies.reset_index(drop=True)
         morphospecies = morphospecies.set_index(MORPHOS_ID)
         return morphospecies
-
-
