@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class MetaformerInferencer:
-    """Inference class for metaformer model"""
+    """
+    DEPRICATED: SEE inference-fastapi
+
+    Inference class for metaformer model
+    """
 
     def __init__(self, device: str = None):
         self.device = torch.device(device) if device is not None else torch.device('cpu')

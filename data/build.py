@@ -12,12 +12,10 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 from timm.data import create_transform
 from timm.data.mixup import Mixup
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from torchvision.transforms import InterpolationMode
 
 from logger import create_logger
 from .samplers import SubsetRandomSampler, DistributedWeightedSampler
@@ -146,41 +144,16 @@ def load_insect_data(config, is_train, transform, logger) -> (datasets.ImageFold
 
 
 def build_transform(is_train, config):
-    resize_im = config.DATA.IMG_SIZE > 32
-    if is_train:
-        # this should always dispatch to transforms_imagenet_train
-        transform = create_transform(
-            input_size=config.DATA.IMG_SIZE,
-            is_training=True,
-            color_jitter=config.AUG.COLOR_JITTER if config.AUG.COLOR_JITTER > 0 else None,
-            auto_augment=config.AUG.AUTO_AUGMENT if config.AUG.AUTO_AUGMENT != 'none' else None,
-            re_prob=config.AUG.REPROB,
-            re_mode=config.AUG.REMODE,
-            re_count=config.AUG.RECOUNT,
-            interpolation='bilinear',
-        )
-        if not resize_im:
-            # replace RandomResizedCropAndInterpolation with
-            # RandomCrop
-            transform.transforms[0] = transforms.RandomCrop(config.DATA.IMG_SIZE, padding=4)
-        return transform
-
-    t = []
-    if resize_im:
-        if config.TEST.CROP:
-            size = int((256 / 224) * config.DATA.IMG_SIZE)
-            t.append(
-                transforms.Resize(size, interpolation=InterpolationMode.BILINEAR),
-                # to maintain same ratio w.r.t. 224 images
-            )
-            t.append(transforms.CenterCrop(config.DATA.IMG_SIZE))
-        else:
-            t.append(
-                transforms.Resize((config.DATA.IMG_SIZE, config.DATA.IMG_SIZE),
-                                  interpolation=InterpolationMode.BILINEAR)
-            )
-
-    t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(
-        IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
-    return transforms.Compose(t)
+    transform = create_transform(
+        input_size=config.DATA.IMG_SIZE,
+        is_training=is_train,
+        color_jitter=config.AUG.COLOR_JITTER if config.AUG.COLOR_JITTER > 0 else None,
+        auto_augment=config.AUG.AUTO_AUGMENT if config.AUG.AUTO_AUGMENT != 'none' else None,
+        re_prob=config.AUG.REPROB,
+        re_mode=config.AUG.REMODE,
+        re_count=config.AUG.RECOUNT,
+        interpolation='bilinear',
+        train_crop_mode='rkrc',
+        crop_mode='border'
+    )
+    return transform
