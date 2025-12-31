@@ -1,5 +1,3 @@
-> *Note: All commands assume the working directory is the root of this repository*
-
 ## Environment
 
 All required packages are installed in the `pytorch` conda virtual environment. To activate it use `conda activate pytorch` inside the shell.
@@ -10,7 +8,7 @@ To update or install libraries, only use the envionment.yml file. Edit the file 
 
 ## Dataset generation
 
-Image selection CSV files are generated on Ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/...`. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation.
+An image selection .csv file identifies the location and classification of images to use. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation.
 
 To initiate dataset generation
 
@@ -22,9 +20,8 @@ The images are accessed through symlinks created during dataset generation. The 
 
 `sudo sshfs ecdysis@ecdysis01.local:/pool1/srv/bugbox3/bugbox3/media/ /pool1/srv/bugbox3/bugbox3/media/ -o allow_other`
 
-Can check if the entry still exists by viewing `proc/self/mounts` as seen below. Or on filesystem usage with `df -H`
+Can check if the entry still exists by viewing filesystem usage with `df -H`
 
-`ecdysis@ecdysis01.local:/pool1/srv/bugbox3/bugbox3/media/ /pool1/srv/bugbox3/bugbox3/media fuse.sshfs rw,nosuid,nodev,relatime,user_id=0,group_id=0,allow_other 0 0`
 
 ## Training
 
@@ -34,29 +31,15 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 ```commandline
     conda activate pytorch
 
-    bash deploy/training.sh "DIRECTORY" "MODEL_NAME"
+    bash deploy/training.sh DATASET_NAME PREVIOUS_VERSION THIS_VERSION
 ```
    *positional arguments*:
 
-    - DIRECTORY       Directory inside the output/ecdysis directory. Usually 'morphospecies'.
-    - MODEL_NAME      Name of the model, will be a directory inside output/ecdysis/test_directory/
+    - DATASET_NAME      Name of the dataset directory.
+    - PREVIOUS_VERSION  The directory name of the previous best.pth checkpoint
+    - THIS_VERSION      Names a new directory inside OUTPUT_DIR and is used as the model version in the inference response
 
- When running with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`), it can run as above to see output, but for longer runs the terminal will eventually close on its own halting the job. To run in background and write output to a file, use `> file.log 2>&1 &` as described below. After starting, exiting the terminal session with `exit` so that the ternimal does not terminate with SIGHUP. Some discussion about this issue is here https://discuss.pytorch.org/t/ddp-error-torch-distributed-elastic-agent-server-api-received-1-death-signal-shutting-down-workers/135720   and here https://github.com/pytorch/pytorch/issues/76894 . Alternatively, tmux could be used, see https://github.com/tmux/tmux/wiki.
-
-
- In the example below, MODEL_NAME == modelVersion in the inference response. The current protocol is to use text based integer version sequence, starting with 1, 2, 3, 4, ... Past versioning used 1.20, 1.21, 1,22, ending with 1.22.
-
-    conda activate pytorch
-
-    bash deploy/training.sh morphospecies MODEL_NAME > output/ecdysis/morphospecies/last_training.log 2>&1 &
-
-    exit
-
-Then one can return later and determine if it still running with the last_training.log. Once the training is completed, the output, stats, and log should be reviewed to determine if it completed successfully and is suitable to deploy.
-
-## Testing
-
-Two ways to test code changes before model training are to use the `ecdysis_test.yml` in the `deploy/training.sh` script instead of `ecdysis.yml`, where the number of epochs is reduced to 1 in `ecdysis_test.yml`. There is also a `test.py` file for existing and new tests to be ran on the GPU's. This option provides a way to jump to a specific function being examined. See that file for how to run.
+ Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background and write output to a file, append the following to the command above ` > file.log 2>&1 &`.
 
 ## Deployment
 
@@ -72,34 +55,7 @@ Deployment start with reviewing the trianing output. Move files to the share dri
 The model is then deployed for inference using the FastAPI app documented here https://github.com/EcdysisFoundation/inference-fastapi
 
 
-## Scripts and modules
-
-#### `dataset_generation/data.py`
-Make a Pandas dataframe from the csv file generated from BugBox's database.
-
-
-#### `split.py`
-
-Generates train/test/val splits from a directory of classified insect pictures. The output directory structure follows
-Imagenet format. Example:
-```
-root/
-├── meta.yaml
-├── test
-│    ├── Eribolus
-│    ├── Liohippelates
-│    └── Oscinella
-├── train
-│    ├── Eribolus
-│    ├── Liohippelates
-│    └── Oscinella
-└── val
-     ├── Eribolus
-     ├── Liohippelates
-     └── Oscinella
-```
-
-### Tensorboard
+## Tensorboard
 
 Training and validation metrics are saved to a directory called tensorboard. To view these, download the directory, and run the Tensorboard server to view. You will need a local environment with tensorboard installed, then following command where tensorboard is the path to the tensorboard directory.
 execute
