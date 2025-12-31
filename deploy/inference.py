@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Union
 
 import torch
+from timm.data import create_transform
 from PIL import Image
 from torch.nn import Softmax
-from torchvision.transforms import transforms, InterpolationMode
+from torchvision.transforms import v2, functional, InterpolationMode
 from yacs.config import CfgNode
 
 from build import build_model
@@ -16,15 +17,32 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class MetaformerInferencer:
+class SquarePad(v2.Transform):
     """
-    DEPRICATED: SEE inference-fastapi
+    Optional custom transform with padding.
+    """
+    def __init__(self, config_img_size):
+        super(SquarePad, self).__init__()
+        self.config_img_size = config_img_size
 
-    Inference class for metaformer model
-    """
+    def transform(self, image, params):
+        w, h = image.size
+        # Determine the size of the square canvas
+        square_size = max(w, h)
+        # prevent upsizing the original image
+        if square_size < self.config_img_size:
+            square_size = self.config_img_size
+        hp = int((square_size - w) / 2)
+        vp = int((square_size - h) / 2)
+        padding = (hp, vp, hp, vp)  # left, top, right, bottom
+        return functional.pad(image, padding, fill=0, padding_mode='constant')
+
+
+class MetaformerInferencer:
+    """Inference class for metaformer model"""
 
     def __init__(self, device: str = None):
-        self.device = torch.device(device) if device is not None else torch.device('cpu')
+        self.device = device
         self._config = None
         self._output_function = None
         self.class_names = None
@@ -43,7 +61,6 @@ class MetaformerInferencer:
             self._config = CfgNode.load_cfg(open(value, "r"))
         else:
             raise ValueError('Type of config must be either yacs.config.CfgNode or pathlib.Path')
-
 
     @property
     def output_function(self) -> callable:
@@ -76,21 +93,39 @@ class MetaformerInferencer:
 
     def make_transform(self):
         """
-        Create image transformation as in training. The transformation is a composition of Resizing to model's input
-        image size -> Conversion to torch tensor -> Normalization using Imagenet's mean and std.
+        Create image transformation as in training evalution, see data.build.py.
 
         Returns: Transformation callable
         """
 
+        transform = create_transform(
+            input_size=self.config.DATA.IMG_SIZE,
+            is_training=False,
+            color_jitter=self.config.AUG.COLOR_JITTER if self.config.AUG.COLOR_JITTER > 0 else None,
+            auto_augment=self.config.AUG.AUTO_AUGMENT if self.config.AUG.AUTO_AUGMENT != 'none' else None,
+            re_prob=self.config.AUG.REPROB,
+            re_mode=self.config.AUG.REMODE,
+            re_count=self.config.AUG.RECOUNT,
+            interpolation='bilinear',
+            train_crop_mode='rkrc',
+            crop_mode='border'
+        )
+        return transform
+
+    def make_tranform_custom(self):
+        """
+        Optional custom transform.
+        """
         imagenet_default_mean = (0.485, 0.456, 0.406)
         imagenet_default_std = (0.229, 0.224, 0.225)
 
         image_size = self.config.DATA.IMG_SIZE
 
-        transform = transforms.Compose([
-            transforms.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR),
-            transforms.ToTensor(),
-            transforms.Normalize(imagenet_default_mean, imagenet_default_std)
+        transform = v2.Compose([
+            SquarePad(image_size),
+            v2.Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR),
+            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+            v2.Normalize(imagenet_default_mean, imagenet_default_std)
         ])
 
         return transform
@@ -113,6 +148,13 @@ class MetaformerInferencer:
         return predictions
 
 
+def load_mapping(map_file: Path):
+    with open(map_file) as f:
+        next(f)  # Skip header, note expected order
+        mapping = {morphospecies_id: morphospecies_name for morphospecies_id, morphospecies_name in csv.reader(f)}
+        return mapping
+
+
 def _get_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description='Metaformer inference script')
@@ -123,13 +165,6 @@ def _get_args() -> argparse.Namespace:
     parser.add_argument('--model-type', type=str, default='MetaFG_2', help='Type of the model, i.e. MetaFG_2')
 
     return parser.parse_args()
-
-
-def load_mapping(map_file: Path):
-    with open(map_file) as f:
-        next(f)  # Skip header, note expected order
-        mapping = {morphospecies_id: morphospecies_name for morphospecies_id, morphospecies_name in csv.reader(f)}
-        return mapping
 
 
 def _main():
@@ -144,7 +179,7 @@ def _main():
     inferencer.build(config, checkpoint, output_function='softmax')
     image = Image.open(args.image_path)
 
-    mapping = load_mapping(Path('deploy/morphospecies_map.csv'))
+    mapping = load_mapping(Path('morphospecies_map.csv'))
     predictions = inferencer(image)
 
     prediction_index = predictions.argmax().item()
