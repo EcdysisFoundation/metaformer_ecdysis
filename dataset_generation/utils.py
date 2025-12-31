@@ -6,15 +6,10 @@ import pandas as pd
 import yaml
 from PIL import Image
 
-from . import LOGGING_LEVEL, INFO
-
-TAXON_LEVELS = levels = ['order', 'family', 'genus']
-SEED = 42
-LOGGING_LEVEL = INFO
+from . import LOGGING_LEVEL
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
-
 
 
 def get_md5_hash(image_path: str):
@@ -67,4 +62,5 @@ def is_image_corrupted(image_path):
         img.verify()  # Verify the image structure
         return False  # Image is not corrupted
     except (IOError, SyntaxError) as e:
+        logger.error(e)
         return True  # Image is corrupted
