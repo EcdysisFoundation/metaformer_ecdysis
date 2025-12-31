@@ -58,22 +58,25 @@ def _get_stats_from_metrics(metrics: MetricCollection, total_column_name: str) -
                 'FN': fn,
                 'Precision': tp / (tp + fp),
                 'Recall': tp / (tp + fn),
-                'F1': 2*tp / (2*tp + fp + fn),
+                'F1': 2 * tp / (2 * tp + fp + fn),
+                'Accuracy': (tp + tn) / (tp + tn + fp + fn),
                 total_column_name: tp + fn
             }
     else:
         # return zeros if MulticlassStatScores not entered, and print keys in case not as expected
         print('MulticlassStatScores not in keys, check dictionary')
         print(metrics.keys())
-        return {'TP': 0,
-                'FP': 0,
-                'TN': 0,
-                'FN': 0,
-                'Precision': 0,
-                'Recall': 0,
-                'F1': 0,
-                total_column_name: 0
+        return {
+            'TP': 0,
+            'FP': 0,
+            'TN': 0,
+            'FN': 0,
+            'Precision': 0,
+            'Recall': 0,
+            'F1': 0,
+            total_column_name: 0
         }
+
 
 def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
     """
