@@ -16,7 +16,7 @@ from yacs.config import CfgNode
 
 from datetime import datetime
 
-from dataset_generation.data import BugBoxData, MORPHOS_ID
+from dataset_generation.data import ImageData, MORPHOS_ID
 
 
 def get_model_metrics(config: CfgNode):
@@ -90,7 +90,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
-        db = BugBoxData()
+        db = ImageData()
         morphospecies_df = db.get_morphospecies_df()
         stats['model_name'] = version
         stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
