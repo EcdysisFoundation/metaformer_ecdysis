@@ -8,29 +8,16 @@ set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_script
 cd /home/ecdysis/MetaFormer/
 
 MODEL_PREFIX="output/ecdysis/$1"
-
-
-DEPLOYED_VERSION=$(curl "ecdysis01.local:8075/models/metaformer" -H "Accept: application/json" | jq '.[0].modelVersion')
 THIS_VERSION="$2"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
-echo "deployed version is ${DEPLOYED_VERSION}"
 echo "This new version is: ${THIS_VERSION}"
 echo "Found ${GPU_COUNT} GPU(s)"
 
 DATASET="bugbox_model_${THIS_VERSION}"
 
-echo "Download latest training_selections file."
-scp ecdysis@ecdysis01.local:/pool1/srv/bugbox3/local_files/training_selections.csv ./dataset_generation/training_selections.csv || exit 11
-wait
-
-python -m dataset_generation "$DATASET" --train-size 0.8 --minimum-images 20 --drop-duplicates
-wait
-
-
 # Copy dataset report from dataset to model folder
 . ./deploy/copy_reports.sh "${DATASET}" "${MODEL_PREFIX}" "${THIS_VERSION}"
-
 
 # Run training starting from last best checkpoint
 /home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis.yaml \
