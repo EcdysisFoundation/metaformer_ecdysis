@@ -10,7 +10,11 @@ To update or install libraries, only use the envionment.yml file. Edit the file 
 
 ## Dataset generation
 
-Image selection CSV files are generated on Ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/...`. Production images are uploaded to AWS S3, while training images are accessed on the Ecdysis01 hardrive. Therefore, new images on AWS S3 need to be synced to Ecdysis01 before training begins. This sync process should be scheduled through BugBox's Celery Beat schedule. Before training a new model, ensure the desired training selections are generated from the BugBox managment command and AWS S3 images are synced after the trainging selections .csv file has been generated. To initiate dataset generation, `python -m dataset_generation --img-mnt /pool1/srv/bugbox3/bugbox3/media/`
+Image selection CSV files are generated on Ecdysis01 in `/srv/bugbox3/bugbox3/core/management/commands/...`. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation and is later returned in the inference response.
+
+To initiate dataset generation
+
+`python -m dataset_generation DATASET_NAME --img-mnt /pool1/srv/bugbox3/bugbox3/media/ --train-size 0.8 --minimum-images 20 --drop-duplicates`
 
 ### Symlink image files
 
