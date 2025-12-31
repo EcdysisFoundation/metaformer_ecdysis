@@ -9,12 +9,13 @@ from sklearn.model_selection import train_test_split
 
 from .utils import save_yaml_file
 from .data import MORPHOS_ID, MORPHOS_NAME
-from . import LOGGING_LEVEL, INFO
+from . import LOGGING_LEVEL, SEED
 
 from tqdm import tqdm
 
 
-# Split and make_directory_tree insect image files from a directory  to its assigned split. The output directory structure follows
+# Split and make_directory_tree insect image files from a directory  to its assigned split.
+# The output directory structure follows
 # Imagenet format. Example:
 #
 #     datasets/insectagen/
@@ -31,10 +32,6 @@ from tqdm import tqdm
 #         ├── Eribolus
 #         ├── Liohippelates
 #         └── Oscinella
-
-
-SEED = 42
-LOGGING_LEVEL = INFO
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGING_LEVEL)
@@ -119,7 +116,7 @@ def filter_underrepresented(images: dict, threshold: int, target_class_name: str
         if is_class_underrepresented(images, class_name, threshold):
             images = remove_class(images, class_name, target_class_name)
             underrepresented_list.append(class_name)
-    return images,underrepresented_list
+    return images, underrepresented_list
 
 
 def save_class_images(splits: dict, class_name: str, output: Path = Path('datasets') / 'data',
@@ -145,7 +142,6 @@ def save_class_images(splits: dict, class_name: str, output: Path = Path('datase
 
         parent.mkdir(parents=True, exist_ok=True)
 
-
         logger.debug(f'Writing images to {parent}')
         for img in tqdm(split_img,
                         desc=f'Copying {len(split_img)} {split_name} images of {class_name.replace("_", " ")} class'):
@@ -154,7 +150,6 @@ def save_class_images(splits: dict, class_name: str, output: Path = Path('datase
 
             if not dst.is_file() and src.is_file():
                 if use_symlinks:
-
                     dst.symlink_to(src)
                 else:
                     copy_img(src, dst)
@@ -207,7 +202,7 @@ def random_split(images_by_class: dict, train_size: float, add_refimages: bool, 
         save_yaml_file({'seed': seed, 'splits': splits}, output, yaml_name)
 
 
-def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.DataFrame:
+def get_count_per_class_split(splits: Dict[str, Dict[str, List[str]]]) -> pd.DataFrame:
     """
     Get the number of images per class in each split
     splits has the following format (as in the splits.yaml file)
@@ -228,10 +223,11 @@ def get_count_per_class_split(splits:Dict[str, Dict[str, List[str]]]) -> pd.Data
 
     for class_id, split in splits.items():
         # id, train, test, val
-        counts.append({MORPHOS_ID:class_id, **{split_name: len(image_paths) for split_name, image_paths in split.items()}})
+        counts.append({MORPHOS_ID: class_id, **{split_name: len(image_paths) for split_name, image_paths in split.items()}})
     return pd.DataFrame(counts)
 
-def generate_split_class_report(splits, morphospecies_map:pd.DataFrame):
+
+def generate_split_class_report(splits, morphospecies_map: pd.DataFrame):
     """
     Return the dataset sample count report
     Merges the split count with the morpho-species name
@@ -249,6 +245,7 @@ def generate_split_class_report(splits, morphospecies_map:pd.DataFrame):
 
     return counts_df.sort_values(by=MORPHOS_NAME)
 
+
 def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlinks: bool,
                   save_yaml: bool = True, seed: int = SEED, **kwargs):
     """
@@ -265,7 +262,7 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
     if not 0 < train_size <= 1:
         raise ValueError('Train size must be between 0 and 1')
 
-    df=df.copy()
+    df = df.copy()
 
     df.replace('', np.nan, inplace=True)  # Handle empty strings
     df.dropna(subset=[MORPHOS_ID], inplace=True)

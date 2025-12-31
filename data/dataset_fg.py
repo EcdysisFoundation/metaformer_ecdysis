@@ -2,10 +2,7 @@ import torch.utils.data as data
 
 import os
 import re
-import csv
 import json
-import torch
-import tarfile
 import pickle
 import numpy as np
 import pandas as pd
@@ -39,14 +36,14 @@ def get_temporal_info(date,miss_hour=False):
                 month = int(m.group(2))
                 day = int(m.group(3))
                 x_month = sin(2*pi*month/12)
-                y_month = cos(2*pi*month/12) 
+                y_month = cos(2*pi*month/12)
                 if miss_hour:
                     x_hour = 0
                     y_hour = 0
                 else:
                     hour = int(m.group(4))
                     x_hour = sin(2*pi*hour/24)
-                    y_hour = cos(2*pi*hour/24)        
+                    y_hour = cos(2*pi*hour/24)
                 return [x_month,y_month,x_hour,y_hour]
             else:
                 return [0,0,0,0]
@@ -59,7 +56,7 @@ def load_file(root,dataset):
         year_flag = 7
     elif dataset == 'inaturelist2018':
         year_flag = 8
-    
+
     if dataset == 'inaturelist2018':
         with open(os.path.join(root,'categories.json'),'r') as f:
             map_label = json.load(f)
@@ -80,7 +77,7 @@ def load_file(root,dataset):
         val_class_info = json.load(f)
     with open(os.path.join(root,f'train201{year_flag}.json'),'r') as f:
         train_class_info = json.load(f)
-    
+
     if dataset == 'inaturelist2017':
         categories_2017 = [x['name'].strip().lower() for x in val_class_info['categories']]
         class_to_idx = {c: idx for idx, c in enumerate(categories_2017)}
@@ -94,7 +91,7 @@ def load_file(root,dataset):
         for categorie in val_class_info['categories']:
             name = map_2018[int(categorie['name'])]
             id2label[int(categorie['id'])] = name.strip().lower()
-    
+
     return train_class_info,train_id2meta,val_class_info,val_id2meta,class_to_idx,id2label
 def find_images_and_targets_cub200(root,dataset,istrain=False,aux_info=False):
     imageid2label = {}
@@ -276,7 +273,7 @@ def find_images_and_targets_stanfordcars(root,dataset,istrain=False,aux_info=Fal
             images_and_targets.append([file_path,target])
         elif not istrain and int(split[0][0])==1:
             images_and_targets.append([file_path,target])
-    return images_and_targets,None,images_info        
+    return images_and_targets,None,images_info
 def find_images_and_targets_aircraft(root,dataset,istrain=False,aux_info=False):
     file_root = os.path.join(root,'fgvc-aircraft-2013b','data')
     if istrain:
@@ -290,7 +287,7 @@ def find_images_and_targets_aircraft(root,dataset,istrain=False,aux_info=False):
             classes.add(class_name)
     classes = sorted(list(classes))
     class_to_idx = {name:ind for ind,name in enumerate(classes)}
-    
+
     images_and_targets = []
     images_info = []
     with open(data_file,'r') as f:
@@ -302,7 +299,7 @@ def find_images_and_targets_aircraft(root,dataset,istrain=False,aux_info=False):
             target = class_to_idx[class_name]
             images_and_targets.append([file_path,target])
     return images_and_targets,class_to_idx,images_info
-            
+
 def find_images_and_targets_2017_2018(root,dataset,istrain=False,aux_info=False):
     train_class_info,train_id2meta,val_class_info,val_id2meta,class_to_idx,id2label = load_file(root,dataset)
     miss_hour = (dataset == 'inaturelist2017')
@@ -327,7 +324,7 @@ def find_images_and_targets_2017_2018(root,dataset,istrain=False,aux_info=False)
                 'latitude':latitude,
                 'longitude':longitude,
                 'location_uncertainty':location_uncertainty,
-                'target':target}) 
+                'target':target})
         if aux_info:
             temporal_info = get_temporal_info(date,miss_hour=miss_hour)
             spatial_info = get_spatial_info(latitude,longitude)
@@ -352,7 +349,7 @@ def find_images_and_targets(root,istrain=False,aux_info=False):
     for categorie in train_class_info['categories']:
         id2label[int(categorie['id'])] = categorie['name'].strip().lower()
     class_info = train_class_info if istrain else val_class_info
-    
+
     images_and_targets = []
     images_info = []
     if aux_info:
@@ -371,7 +368,7 @@ def find_images_and_targets(root,istrain=False,aux_info=False):
                 'latitude':latitude,
                 'longitude':longitude,
                 'location_uncertainty':location_uncertainty,
-                'target':target}) 
+                'target':target})
         if aux_info:
             temporal_info = get_temporal_info(date)
             spatial_info = get_spatial_info(latitude,longitude)
@@ -420,7 +417,7 @@ class DatasetMeta(data.Dataset):
         self.images_info = images_info
         self.load_bytes = load_bytes
         self.transform = transform
-        
+
 
     def __getitem__(self, index):
         if self.aux_info:
@@ -453,5 +450,5 @@ if __name__ == '__main__':
 #     train_dataset = DatasetMeta('./aircraft',train=False,aux_info=False,dataset='aircraft')
     import ipdb;ipdb.set_trace()
 #     find_images_and_targets_2017('')
-    
+
 

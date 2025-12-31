@@ -1,12 +1,12 @@
-import base64
 import io
 import logging
 from pathlib import Path
+from abc import ABC
 
 import torch
 from PIL import Image
 
-from ts.torch_handler.vision_handler import VisionHandler
+from ..torch_handler.base_handler import BaseHandler
 
 from inference import MetaformerInferencer, load_mapping
 
@@ -14,66 +14,33 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class MetaformerHandler(VisionHandler):
+class MetaformerHandler(BaseHandler, ABC):
     """Torchserve handler for the MetaFormer model """
 
     def __init__(self):
+        # TODO: replace paths with your path location
         super(MetaformerHandler, self).__init__()
         self.device = 'cpu'
         self.mapping = load_mapping(Path('morphospecies_map.csv'))
-        self.config = None
-        self.checkpoint = None
-
-    def get_context(self, context):
-        """
-        Process context object
-        Args:
-            context: Context contains model server system properties.
-        """
-        self.context = context
-        self.manifest = context.manifest
-
-        properties = context.system_properties
-        model_dir = Path(properties.get("model_dir"))
-        serialized_file = self.manifest['model']['serializedFile']
-        self.checkpoint = model_dir / serialized_file
+        self.checkpoint = Path('best.pth')
         self.config = Path('config.yaml')
 
-    def initialize(self, context):
+    def initialize(self):
         """
-        Initialize model. This method is only called when a new worker is added to this model in TorchServe
-        Args:
-            context: Initial context contains model server system properties, this is Torchserve specific.
+        Initialize model. In Torchserve, this method is called when a new worker is added to this model.
         """
-
-        self.get_context(context)
-
         self.model = MetaformerInferencer(self.device)
         self.model.build(self.config, self.checkpoint, output_function='softmax')
-
         self.initialized = True
 
-    def preprocess(self, data):
-        """The preprocess function converts the input data to a float tensor
-        Args:
-            data (List): Input data from the request is in the form of a Tensor
-        Returns:
-            list : The preprocess function returns the input image as a list of float tensors.
-        """
-        image = None
-        for row in data:
-            # Compat layer: normally the envelope should just return the data
-            # directly, but older versions of Torchserve didn't have envelope.
-            image = row.get("data") or row.get("body") or row.get("file")  # BugBox puts uploaded images on the 'file' field
-            if isinstance(image, str):
-                # if the image is a string of bytesarray.
-                image = base64.b64decode(image)
+    def preprocess(self, image_data):
 
-            # If the image is sent as bytesarray
-            if isinstance(image, (bytearray, bytes)):
-                image = Image.open(io.BytesIO(image))
+        try:
+            img = Image.open(io.BytesIO(image_data))
+            return img.convert("RGB")
 
-        return image
+        except Exception:
+            return None
 
     def postprocess(self, inference_data, minimum_confidence=0.0):
         """
@@ -119,7 +86,8 @@ class MetaformerHandler(VisionHandler):
                         'morphospecies_id': int(labels),
                         'name': morphospecies,
                         'optional_preds': [],
-                        'modelVersion': self.manifest['model']['modelVersion']}
+                        'modelVersion': self.model.config.VERSION
+                        }
 
             # Add optional predictions if there is a confident primary prediction
             if primary_confidence >= minimum_confidence:
@@ -134,17 +102,19 @@ class MetaformerHandler(VisionHandler):
 
         return output
 
-    def handle(self, data, context):
+    def handle(self, image_data):
         """
         Entrypoint method for all prediction requests
         Args:
-            data: Input data for prediction
-            context: Initial context contains model server system properties.
+            data: io.By
 
         Returns: Output response
         """
-        images = self.preprocess(data)
-        predictions = self.model(images)
+
+        imgbytes = self.preprocess(image_data)
+        if not imgbytes:
+            return [{'message': 'Waring: PIL could not open image'}]
+        predictions = self.model(imgbytes)
         output = self.postprocess(predictions)
 
         return output

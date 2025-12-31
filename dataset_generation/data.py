@@ -4,7 +4,7 @@ MORPHOS_ID = 'morphos_id'
 MORPHOS_NAME = 'morphos_name'
 
 
-class BugBoxData:
+class ImageData:
 
     def get_df(self: str):
         """

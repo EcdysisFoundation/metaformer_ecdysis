@@ -37,7 +37,8 @@ def get_model_metrics(config: CfgNode):
 
     return MetricCollection(metrics)
 
-def _get_stats_from_metrics(metrics:MetricCollection,total_column_name:str) -> dict:
+
+def _get_stats_from_metrics(metrics: MetricCollection, total_column_name: str) -> dict:
     """
     Get per class statistics
     Args:
@@ -85,7 +86,7 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
 
     Returns: Statistics data frame
     """
-    stats_data = _get_stats_from_metrics(metrics,'Total_samples')
+    stats_data = _get_stats_from_metrics(metrics, 'Total_samples')
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
