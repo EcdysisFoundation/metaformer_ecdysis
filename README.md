@@ -1,31 +1,34 @@
+# metaformer_ecdysis
+
+This repo uses a MetaFormer modeling approach to serve as an AI classification model for the Ecdsysis Foundation's ( https://www.ecdysis.bio/ ) BugBox applcation, see https://bugbox.ecdysis.bio/ . As part of our work, we generate biological inventories of farm sites in various stages of regenerative adoption. One aspect of this is collecting and identifying many hundreds of thousands of insects. We use artificial intelligence to give preliminary identifications to each insect we collect, then review a proportion of identifications and retrain our model to improve it over time. This activity is described in the following peer review publication.
+
+Welch, K. Wilson, M. Lundgren, J (2025). Evaluation of BugBox, a software platform for AI-assisted bioinventories of
+arthropods. Journal of Animal Ecology. https://doi.org/10.1111/1365-2656.70178
+
+## Origination
+
+This repo was originally forked from https://github.com/dqshuai/MetaFormer . A part of this code was borrowed from https://github.com/microsoft/Swin-Transformer
+
+The MetaFormer model is described in the original README here https://github.com/EcdysisFoundation/metaformer_ecdysis/blob/main/metaformer.md
+
+Updates to these include compatibility to torch==2.6.0.
+
 ## Environment
 
-All required packages are installed in the `pytorch` conda virtual environment. To activate it use `conda activate pytorch` inside the shell.
-
-To update or install libraries, only use the envionment.yml file. Edit the file and use the following to update the environment. Only install python from Conda Forge, then install all Python packages from PIP because Pytorch is only supported on PIP now, and installing everything through PIP will help ensure library compatibilities.
-
-`conda env update --file environment.yml  --prune`
+All required packages are installed in the `pytorch` conda virtual environment, see `environment.yml`. See `environment_freeze.yml` for exact versions last confirmed to work with our Ubuntu operating system, Intel i9 CPU, and two Nvidia RTX GPUs.
 
 ## Dataset generation
 
-An image selection .csv file identifies the location and classification of images to use. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation.
+An image selection .csv file identifies the location and classification of images to use. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation. We use this process to create symlinks to another location on a local network.
 
 To initiate dataset generation
 
 `python -m dataset_generation DATASET_NAME --img-mnt /pool1/srv/bugbox3/bugbox3/media/ --train-size 0.8 --minimum-images 20 --drop-duplicates`
 
-### Symlink image files
-
-The images are accessed through symlinks created during dataset generation. The drive location on Ecdysis01 needs to be mapped for this to work. This is done with the following command, and will need to be re-linked after a system reboot.
-
-`sudo sshfs ecdysis@ecdysis01.local:/pool1/srv/bugbox3/bugbox3/media/ /pool1/srv/bugbox3/bugbox3/media/ -o allow_other`
-
-Can check if the entry still exists by viewing filesystem usage with `df -H`
-
 
 ## Training
 
-Currently training is done with ... `deploy/training.sh`. This uses the training selections file to structure images and files for model traning (see `dataset_generation`), starts the training, and runs some analytics at the end. It does not deploy to the trained model to the server. Output should be reviewed before deploying the newly trained model.
+Training is initiated with ... `deploy/training.sh`. This uses the image directories sctructured from `dataset_generation`, starts the training, and runs some analytics at the end.
 
 *usage*:
 ```commandline
@@ -43,17 +46,7 @@ Currently training is done with ... `deploy/training.sh`. This uses the training
 
 ## Deployment
 
-Deployment start with reviewing the trianing output. Move files to the share drive for review. This assumes DIRECTORY == 'morphospecies'. On Ecdysis01, with the new MODEL_NAME ..
-
-    mkdir /pool1/smb/metaformer-stats/MODEL_NAME
-
-    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/MODEL_NAME/dataset_report_stats.csv /pool1/smb/metaformer-stats/MODEL_NAME/dataset_report_stats.csv
-
-    scp ecdysis@ecdysis02.local:~/MetaFormer/output/ecdysis/morphospecies/training_results.csv /pool1/smb/metaformer-stats/MODEL_NAME/training_results.csv
-
-
 The model is then deployed for inference using the FastAPI app documented here https://github.com/EcdysisFoundation/inference-fastapi
-
 
 ## Tensorboard
 
@@ -63,7 +56,3 @@ execute
 tensorboard --logdir tensorboard --bind_all
 ```
 then open a browser and go to to the local computer url indicated on the command line
-
-## Origination
-
-This repo was forked from https://github.com/dqshuai/MetaFormer
