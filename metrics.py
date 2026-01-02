@@ -59,7 +59,6 @@ def _get_stats_from_metrics(metrics: MetricCollection, total_column_name: str) -
                 'Precision': tp / (tp + fp),
                 'Recall': tp / (tp + fn),
                 'F1': 2 * tp / (2 * tp + fp + fn),
-                'Accuracy': (tp + tn) / (tp + tn + fp + fn),
                 total_column_name: tp + fn
             }
     else:
