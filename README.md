@@ -23,7 +23,7 @@ An image selection .csv file identifies the location and classification of image
 
 To initiate dataset generation
 
-`python -m dataset_generation DATASET_NAME --img-mnt /pool1/srv/bugbox3/bugbox3/media/ --train-size 0.8 --minimum-images 20 --drop-duplicates`
+`python -m dataset_generation DATASET_NAME --img-mnt /pool1/srv/bugbox3/bugbox3/media/ --train-size 0.8 --minimum-images 20`
 
 
 ## Training
