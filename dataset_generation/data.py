@@ -16,7 +16,7 @@ class ImageData:
 
     def get_reviewed_images_df(self):
         reviewed_images = self.get_df()
-        return reviewed_images[[MORPHOS_NAME, MORPHOS_ID, 'specimen_id', 'image', 'specimen_count']]
+        return reviewed_images[[MORPHOS_NAME, MORPHOS_ID, 'specimen_id', 'image']]
 
     def get_morphospecies_df(self):
         morphospecies = self.get_df()

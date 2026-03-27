@@ -37,22 +37,38 @@ def drop_identical_images(data: pd.DataFrame):
     Returns: DataFrame with duplicates removed and a new column 'hash' containing the md5 hash of the image
 
     """
-    # Check if we have a cache of hashes
-    if Path('.cache/hashes.csv').is_file():
+    cache_path = Path('.cache/hashes.csv')
+
+    # 1. Load hashes
+    if cache_path.is_file():
         logger.info('Loading hashes from cache')
-        hashes = pd.read_csv('.cache/hashes.csv')
-        data = data.merge(hashes, on='image', how='left')
+        cache_df = pd.read_csv(cache_path).drop_duplicates(subset=['image'])
+        cache_map = cache_df.set_index('image')['hash']
     else:
-        data['hash'] = None
+        cache_map = pd.Series(dtype=str)
 
-    num_starting_images = len(data)
-    logger.info('Removing duplicates, {0} images to check'.format(num_starting_images))
-    null_hash_mask = data['hash'].isnull()
-    data.loc[null_hash_mask, 'hash'] = data.loc[null_hash_mask, 'image'].apply(get_md5_hash)
-    data[['image', 'hash']].to_csv('.cache/hashes.csv', index=False)
+    # 2. Map existing hashes to our current data
+    data['hash'] = data['image'].map(cache_map)
+
+    # 3. Only process images that are still null
+    null_mask = data['hash'].isnull()
+    num_to_check = null_mask.sum()
+
+    if num_to_check > 0:
+        logger.info(f'Calculating hashes for {num_to_check} new images')
+        data.loc[null_mask, 'hash'] = data.loc[null_mask, 'image'].apply(get_md5_hash)
+
+        # 4. Update the persistent cache with ONLY unique new entries
+        # We combine the old cache with new results and drop duplicates
+        new_hashes = data[['image', 'hash']].dropna()
+        updated_cache = pd.concat([cache_df if cache_path.is_file() else None, new_hashes])
+        updated_cache.drop_duplicates(subset=['image']).to_csv(cache_path, index=False)
+
+    # 5. Drop duplicates from the current session based on the hash
+    num_starting = len(data)
     output = data.drop_duplicates(subset=['hash'])
-    logger.info(f'---------Dropped {num_starting_images - len(output)} duplicated images---------')
 
+    logger.info(f'Dropped {num_starting - len(output)} duplicated images')
     return output
 
 
