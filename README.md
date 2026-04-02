@@ -18,7 +18,7 @@ All required packages are installed in the `pytorch` conda virtual environment, 
 
 ## Dataset generation
 
-An image selection .csv file identifies the location and classification of images to use. Copy this file to `/dataset_generation/training_selections.csv` . See expected format in `dataset_generation/data.py` We version each training with a name (example DATASET_NAME). This name is used in directory creation. We use this process to create symlinks to another location on a local network.
+An image selection .csv file identifies the location and classification of images to use. Copy this file to `/dataset_generation/training_selections.csv` . We use this process to create symlinks to another location on a local network. See expected format in `dataset_generation/data.py` DATASET_NAME is used in directory creation.
 
 To initiate dataset generation
 
@@ -28,6 +28,8 @@ To initiate dataset generation
 ## Training
 
 Training is initiated with ... `deploy/training.sh`. This uses the image directories sctructured from `dataset_generation`, starts the training, and runs some analytics at the end.
+
+We version each training with a name (THIS_VERSION). This can be the same as the DATASET_NAME or if multiple trainings are run on the same dataset, varying them with a diffent value for THIS_VERSION keeps from overwriting previous runs. This name is used in directory creation.
 
 *usage*:
 ```commandline
