@@ -174,8 +174,8 @@ _C.TEST.CROP = True
 # overwritten by command line argument
 # Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
-# Tag of experiment, overwritten by command line argument
-_C.TAG = 'default'
+# Tag of model, overwritten by command line argument
+_C.TAG = None
 _C.VERSION = None
 # Frequency to save checkpoint
 _C.SAVE_FREQ = 10
@@ -270,7 +270,7 @@ def update_config(config, args):
         config.MODEL.PRETRAINED = args.pretrain
 
     # output folder
-    config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG, str(config.VERSION))
+    config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, str(config.TAG), str(config.VERSION))
 
     config.freeze()
 
