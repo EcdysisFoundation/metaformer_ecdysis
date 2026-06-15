@@ -4,12 +4,19 @@
 
 set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
 
+# run script, writing output to log
+# bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > training_run.log 2>&1 &
+# bash deploy/training.sh 6 ecdysis/6/6 testing6 > training_run.log 2>&1 &
+# view training log for status updates
+# tail -f training_run.log
+
+export PYTHONUNBUFFERED=1
 
 cd /home/ecdysis/MetaFormer/
 
-OUTPUT_DIR="output/ecdysis/morphospecies"
+OUTPUT_DIR="output/"
 DATASET_NAME="$1"
-PREVIOUS_VERSION="$2"
+STARTING_CHECKPOINT="$2"
 THIS_VERSION="$3"
 
 export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
@@ -20,11 +27,11 @@ echo "Found ${GPU_COUNT} GPU(s)"
 . ./deploy/copy_reports.sh "${DATASET_NAME}" "${OUTPUT_DIR}" "${THIS_VERSION}"
 
 # Run training starting from last best checkpoint
-/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis.yaml \
+/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis_test.yaml \
  --data-path "datasets/${DATASET_NAME}/" --tag "$1" --version "$THIS_VERSION" \
-  --pretrain "${OUTPUT_DIR}/${STARTING_CHECKPOINT}/best.pth" >/dev/null
+  --pretrain "${OUTPUT_DIR}/${STARTING_CHECKPOINT}/best.pth"
 wait
 # Evaluate trained model
-/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
-  --cfg "${OUTPUT_DIR}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET_NAME}" --eval  --pretrain "${OUTPUT_DIR}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION" > "${OUTPUT_DIR}/${THIS_VERSION}/console_output.txt"
-wait
+#/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
+#  --cfg "${OUTPUT_DIR}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET_NAME}" --eval  --pretrain "${OUTPUT_DIR}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION"
+#wait
