@@ -14,7 +14,7 @@ export PYTHONUNBUFFERED=1
 
 cd /home/ecdysis/MetaFormer/
 
-OUTPUT_DIR="output/"
+OUTPUT_DIR="output/ecdysis/"
 DATASET_NAME="$1"
 STARTING_CHECKPOINT="$2"
 THIS_VERSION="$3"
