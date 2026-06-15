@@ -91,7 +91,7 @@ def parse_option():
 
 def main(config):
     if config.EVAL_MODE:
-        logger.info(f"Running in eval mode")
+        logger.info("Running in eval mode")
         if config.MODEL.PRETRAINED:
             logger.info(f"Loading pretrained model from {config.MODEL.PRETRAINED}")
         else:
@@ -110,14 +110,14 @@ def main(config):
 
     optimizer = build_optimizer(config, model)
 
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
 
     model_without_ddp = model.module
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     logger.info(f"Number of trainable parameters: {n_parameters}")
-
 
     if config.EVAL_MODE:
         load_pretained(config, model_without_ddp, logger)
@@ -156,7 +156,7 @@ def main(config):
         acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
         if config.DATA.ADD_META:
-            logger.info(f"**********mask meta test***********")
+            logger.info("**********mask meta test***********")
             acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
             logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
         if config.EVAL_MODE:
@@ -179,9 +179,10 @@ def main(config):
 
     start_time = time.time()
 
-    logger.info(f"Starting training loop from epoch {config.TRAIN.START_EPOCH} to {config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS}")
+    range_end = config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS
+    logger.info(f"Starting training loop from epoch {config.TRAIN.START_EPOCH} to {range_end}")
 
-    for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.START_EPOCH + config.TRAIN.EPOCHS):
+    for epoch in range(config.TRAIN.START_EPOCH, range_end):
         data_loader_train.sampler.set_epoch(epoch)
 
         # Train
@@ -208,7 +209,7 @@ def main(config):
                 logger.info(f"Saving periodic checkpoint at epoch {epoch}...")
                 save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'epoch_{epoch}')
             # Save latest checkpoint
-            save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, f'latest')
+            save_checkpoint(config, epoch, model_without_ddp, max_accuracy, optimizer, lr_scheduler, 'latest')
 
         if epoch > config.TRAIN.EARLY_STOP.MIN_EPOCHS and stopper.early_stop(acc1):
             logger.info(f"Early stopping triggered at epoch {epoch}")
@@ -219,7 +220,9 @@ def main(config):
     logger.info('Total Training Time: {}'.format(total_time_str))
 
 
-def train_one_epoch_local_data(config, model, criterion, data_loader, optimizer, epoch, mixup_fn, lr_scheduler, scaler, tb_logger=None, log_freq=50):
+def train_one_epoch_local_data(
+        config, model, criterion, data_loader, optimizer,
+        epoch, mixup_fn, lr_scheduler, scaler, tb_logger=None, log_freq=500):
     model.train()
     if hasattr(model.module, 'cur_epoch'):
         model.module.cur_epoch = epoch
