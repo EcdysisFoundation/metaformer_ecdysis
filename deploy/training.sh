@@ -6,11 +6,9 @@ set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_script
 
 # run script, writing output to log
 # bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > training_run.log 2>&1 &
-# bash deploy/training.sh 6 ecdysis/6/6 testing6 > training_run.log 2>&1 &
+# bash deploy/training.sh 6 6/6 testing6 > training_run.log 2>&1 &
 # view training log for status updates
 # tail -f training_run.log
-
-export PYTHONUNBUFFERED=1
 
 cd /home/ecdysis/MetaFormer/
 
@@ -19,7 +17,11 @@ DATASET_NAME="$1"
 STARTING_CHECKPOINT="$2"
 THIS_VERSION="$3"
 
-export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+export PYTHONUNBUFFERED=1
+# choose one of the gpus
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0
+export GPU_COUNT=1
 echo "This new version is: ${THIS_VERSION}"
 echo "Found ${GPU_COUNT} GPU(s)"
 
