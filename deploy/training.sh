@@ -18,10 +18,7 @@ STARTING_CHECKPOINT="$2"
 THIS_VERSION="$3"
 
 export PYTHONUNBUFFERED=1
-# choose one of the gpus
-export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=0
-export GPU_COUNT=1
+export GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 echo "This new version is: ${THIS_VERSION}"
 echo "Found ${GPU_COUNT} GPU(s)"
 
