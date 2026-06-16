@@ -28,7 +28,7 @@ echo "Found ${GPU_COUNT} GPU(s)"
 . ./deploy/copy_reports.sh "${DATASET_NAME}" "${OUTPUT_DIR}" "${THIS_VERSION}"
 
 # Run training starting from last best checkpoint
-/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis_test.yaml \
+/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py --cfg configs/ecdysis.yaml \
  --data-path "datasets/${DATASET_NAME}/" --tag "$1" --version "$THIS_VERSION" \
   --pretrain "${OUTPUT_DIR}/${STARTING_CHECKPOINT_DIR}/best.pth"
 wait
