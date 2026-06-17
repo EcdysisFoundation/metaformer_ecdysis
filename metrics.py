@@ -147,7 +147,7 @@ def dump_summary(metrics: MetricCollection, config: CfgNode, dump: bool = False)
     }
 
     if dump:
-        csv_file = Path(config.OUTPUT).parent/'training_results.csv'
+        csv_file = Path(config.OUTPUT).parent/f'{config.VERSION}_training_results.csv'
         exists = csv_file.is_file()
         with open(csv_file, 'a') as f:
             writer = csv.writer(f)

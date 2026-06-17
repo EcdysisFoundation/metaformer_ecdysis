@@ -5,11 +5,11 @@
 # $2: model PREFIX
 # $3: new model VERSION
 DATASET=$1
-MODEL_PREFIX=$2
+OUTPUT_DIR=$2
 THIS_VERSION=$3
 # As training can take long it's better to avoid referencing the dataset folder, put all required files in the model folder
-mkdir -p "${MODEL_PREFIX}/${THIS_VERSION}"
+mkdir -p "${OUTPUT_DIR}/${DATASET}/${THIS_VERSION}"
 
-cp "datasets/${DATASET}/dataset_report.csv" "${MODEL_PREFIX}/${THIS_VERSION}/dataset_report.csv"
-cp "datasets/${DATASET}/morphospecies_map.csv" "${MODEL_PREFIX}/${THIS_VERSION}/morphospecies_map.csv"
-cp "dataset_generation/training_selections.csv" "${MODEL_PREFIX}/${THIS_VERSION}/training_selections.csv"
+cp "datasets/${DATASET}/dataset_report.csv" "${OUTPUT_DIR}/${DATASET}/${THIS_VERSION}/dataset_report.csv"
+cp "datasets/${DATASET}/morphospecies_map.csv" "${OUTPUT_DIR}/${DATASET}/${THIS_VERSION}/morphospecies_map.csv"
+cp "dataset_generation/training_selections.csv" "${OUTPUT_DIR}/${DATASET}/${THIS_VERSION}/training_selections.csv"

@@ -35,12 +35,12 @@ We version each training with a name (THIS_VERSION). This can be the same as the
 ```commandline
     conda activate pytorch
 
-    bash deploy/training.sh DATASET_NAME PREVIOUS_VERSION THIS_VERSION
+    bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION
 ```
    *positional arguments*:
 
     - DATASET_NAME      Name of the dataset directory.
-    - PREVIOUS_VERSION  The directory name of the previous best.pth checkpoint
+    - STARTING_CHECKPOINT  The directory name of the starting best.pth checkpoint
     - THIS_VERSION      Names a new directory inside OUTPUT_DIR and is used as the model version in the inference response
 
  Training can be run with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background and write output to a file, append the following to the command above ` > file.log 2>&1 &`.
