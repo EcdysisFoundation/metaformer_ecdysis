@@ -36,6 +36,3 @@ wait
 /home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
   --cfg "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET_NAME}" --eval  --pretrain "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION"
 wait
-
-/home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node 2 main.py \
-  --cfg "output/ecdysis/6/7/config.yaml" --dataset bugbox --data-path "datasets/6" --eval  --pretrain "output/ecdysis/6/7/best.pth" --version "7"
