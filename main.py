@@ -97,6 +97,7 @@ def main(config):
         else:
             raise ValueError("Pretrained model path needs to be specified when running in eval mode")
         dataset_test, data_loader_test = build_loader(config)
+        logger.info("Test class mapping:", dataset_test.class_to_idx)
     else:
         # The data needs to be loaded before the model is created to fill the num_classes field
         dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
@@ -159,8 +160,6 @@ def main(config):
             logger.info("**********mask meta test***********")
             acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
             logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
-        if config.EVAL_MODE:
-            return
 
     if config.THROUGHPUT_MODE:
         throughput(data_loader_val, model, logger)
@@ -265,20 +264,32 @@ def train_one_epoch_local_data(
             loss = loss / config.TRAIN.ACCUMULATION_STEPS
             scaler.scale(loss).backward()
 
-            scaler.unscale_(optimizer)
-            if config.TRAIN.CLIP_GRAD:
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
-            else:
-                grad_norm = get_grad_norm(model.parameters())
+            # Check if we hit the step milestone OR reached the absolute end of the epoch data
+            is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
+            is_final_batch = (idx + 1) == num_steps
 
-            if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
+            if is_accum_boundary or is_final_batch:
+                scaler.unscale_(optimizer)
+
+                if config.TRAIN.CLIP_GRAD:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
+                else:
+                    grad_norm = get_grad_norm(model.parameters())
+
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
                 lr_scheduler.step_update(epoch * num_steps + idx)
+                if dist.get_rank() == 0 and tb_logger is not None:
+                    global_step = epoch * num_steps + idx
+                    tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
+                norm_meter.update(grad_norm)
+            else:
+                # For intermediate steps, set to zero, dont use,
+                # and do NOT clip the parameters yet.
+                grad_norm = torch.tensor(0.0)
         else:
             scaler.scale(loss).backward()
-
             scaler.unscale_(optimizer)
             if config.TRAIN.CLIP_GRAD:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
@@ -289,13 +300,17 @@ def train_one_epoch_local_data(
             scaler.update()
             optimizer.zero_grad()
             lr_scheduler.step_update(epoch * num_steps + idx)
+            # --- LOG STANDARD GRAD NORM TO TENSORBOARD ---
+            if dist.get_rank() == 0 and tb_logger is not None:
+                global_step = epoch * num_steps + idx
+                tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
+            norm_meter.update(grad_norm)
 
         torch.cuda.synchronize()
 
         # Scale back the loss value for metrics accumulation if using gradient accumulation
         loss_val = loss.item() * config.TRAIN.ACCUMULATION_STEPS if config.TRAIN.ACCUMULATION_STEPS > 1 else loss.item()
         loss_meter.update(loss_val, targets.size(0))
-        norm_meter.update(grad_norm)
 
         # Periodic Batch-level Feedback (Console & TensorBoard)
         if idx % log_freq == 0 and dist.get_rank() == 0:
@@ -304,7 +319,7 @@ def train_one_epoch_local_data(
             logger.info(
                 f"Train Epoch: [{epoch}][{idx}/{num_steps}]  "
                 f"Batch Loss: {loss_val:.4f} (Avg: {loss_meter.avg:.4f})  "
-                f"Grad Norm: {grad_norm:.4f}  "
+                f"Grad Norm (Avg): {norm_meter.avg:.4f}  "
                 f"LR: {lr:.6f}  "
                 f"Mem: {memory_used:.0f}MB"
             )
@@ -312,7 +327,7 @@ def train_one_epoch_local_data(
             if tb_logger is not None:
                 global_step = epoch * num_steps + idx
                 tb_logger.add_scalar('train/batch_loss', loss_val, global_step)
-                tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
+                # Note: batch_grad_norm is omitted here because it's recorded above at step-time
 
     # Epoch-level Summary for TensorBoard
     if dist.get_rank() == 0 and tb_logger is not None:
@@ -345,7 +360,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
@@ -375,6 +390,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
+@torch.no_grad()
 def test(config, data_loader, model):
     model.eval()
     metrics = get_model_metrics(config)
@@ -393,7 +409,7 @@ def test(config, data_loader, model):
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
