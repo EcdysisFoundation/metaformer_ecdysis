@@ -160,8 +160,6 @@ def main(config):
             logger.info("**********mask meta test***********")
             acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
             logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
-        if config.EVAL_MODE:
-            return
 
     if config.THROUGHPUT_MODE:
         throughput(data_loader_val, model, logger)
@@ -265,7 +263,12 @@ def train_one_epoch_local_data(
         if config.TRAIN.ACCUMULATION_STEPS > 1:
             loss = loss / config.TRAIN.ACCUMULATION_STEPS
             scaler.scale(loss).backward()
-            if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
+
+            # Check if we hit the step milestone OR reached the absolute end of the epoch data
+            is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
+            is_final_batch = (idx + 1) == num_steps
+
+            if is_accum_boundary or is_final_batch:
                 scaler.unscale_(optimizer)
 
                 if config.TRAIN.CLIP_GRAD:
@@ -277,7 +280,6 @@ def train_one_epoch_local_data(
                 scaler.update()
                 optimizer.zero_grad()
                 lr_scheduler.step_update(epoch * num_steps + idx)
-                # --- LOG TRUE GRAD NORM TO TENSORBOARD IMMEDIATELY ---
                 if dist.get_rank() == 0 and tb_logger is not None:
                     global_step = epoch * num_steps + idx
                     tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
@@ -358,7 +360,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
@@ -388,6 +390,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
+@torch.no_grad()
 def test(config, data_loader, model):
     model.eval()
     metrics = get_model_metrics(config)
@@ -406,7 +409,7 @@ def test(config, data_loader, model):
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
