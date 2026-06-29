@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import argparse
+import contextlib
 import datetime
 from pathlib import Path
 
@@ -235,6 +236,12 @@ def train_one_epoch_local_data(
 
     start_time = time.time()
 
+    # Calculate the base step for the LR scheduler
+    steps_per_epoch = num_steps // config.TRAIN.ACCUMULATION_STEPS
+    if num_steps % config.TRAIN.ACCUMULATION_STEPS != 0:
+        steps_per_epoch += 1
+    optimizer_step = epoch * steps_per_epoch
+
     for idx, data in enumerate(data_loader):
         if idx == 1 and dist.get_rank() == 0:
             logger.info(f"Time to load the first batch: {time.time() - start_time:.4f} seconds")
@@ -255,39 +262,28 @@ def train_one_epoch_local_data(
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-            if config.DATA.ADD_META:
-                outputs = model(samples, meta)
-            else:
-                outputs = model(samples)
-            loss = criterion(outputs, targets)
+        is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
+        is_final_batch = (idx + 1) == num_steps
+        should_step = is_accum_boundary or is_final_batch
 
-        if config.TRAIN.ACCUMULATION_STEPS > 1:
-            loss = loss / config.TRAIN.ACCUMULATION_STEPS
-            loss.backward()
+        # Prevent DDP gradient synchronization unless we are stepping the optimizer
+        require_sync = should_step or not isinstance(model, torch.nn.parallel.DistributedDataParallel)
+        sync_context = contextlib.nullcontext() if require_sync else model.no_sync()
 
-            is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
-            is_final_batch = (idx + 1) == num_steps
-
-            if is_accum_boundary or is_final_batch:
-                if config.TRAIN.CLIP_GRAD:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
+        with sync_context:
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                if config.DATA.ADD_META:
+                    outputs = model(samples, meta)
                 else:
-                    grad_norm = get_grad_norm(model.parameters())
+                    outputs = model(samples)
+                loss = criterion(outputs, targets)
 
-                optimizer.step()
-                optimizer.zero_grad()
-                lr_scheduler.step_update(epoch * num_steps + idx)
+            if config.TRAIN.ACCUMULATION_STEPS > 1:
+                loss = loss / config.TRAIN.ACCUMULATION_STEPS
 
-                if dist.get_rank() == 0 and tb_logger is not None:
-                    global_step = epoch * num_steps + idx
-                    tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
-                norm_meter.update(grad_norm)
-            else:
-                grad_norm = torch.tensor(0.0)
-        else:
             loss.backward()
 
+        if should_step:
             if config.TRAIN.CLIP_GRAD:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
             else:
@@ -295,12 +291,15 @@ def train_one_epoch_local_data(
 
             optimizer.step()
             optimizer.zero_grad()
-            lr_scheduler.step_update(epoch * num_steps + idx)
+            lr_scheduler.step_update(optimizer_step)
 
             if dist.get_rank() == 0 and tb_logger is not None:
-                global_step = epoch * num_steps + idx
-                tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
+                tb_logger.add_scalar('train/batch_grad_norm', grad_norm, optimizer_step)
+
             norm_meter.update(grad_norm)
+            optimizer_step += 1
+        else:
+            grad_norm = torch.tensor(0.0)
 
         torch.cuda.synchronize()
 
@@ -319,8 +318,8 @@ def train_one_epoch_local_data(
             )
 
             if tb_logger is not None:
-                global_step = epoch * num_steps + idx
-                tb_logger.add_scalar('train/batch_loss', loss_val, global_step)
+                # Use the actual optimizer step for Tensorboard logging for consistency
+                tb_logger.add_scalar('train/batch_loss', loss_val, optimizer_step)
 
     # Epoch-level Summary for TensorBoard
     if dist.get_rank() == 0 and tb_logger is not None:
