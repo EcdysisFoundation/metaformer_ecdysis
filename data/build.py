@@ -32,7 +32,7 @@ def build_loader(config):
         data_loader_test = torch.utils.data.DataLoader(dataset_test,
                                                        batch_size=config.DATA.BATCH_SIZE,
                                                        shuffle=False,
-                                                       num_workers=config.DATA.NUM_WORKERS / 2,
+                                                       num_workers=config.DATA.NUM_WORKERS // 2,
                                                        pin_memory=config.DATA.PIN_MEMORY,
                                                        drop_last=False)
         config.DATA.TEST_SAMPLES = len(dataset_test)
@@ -78,7 +78,7 @@ def build_loader(config):
             dataset_val, sampler=sampler_val,
             batch_size=config.DATA.BATCH_SIZE,
             shuffle=False,
-            num_workers=config.DATA.NUM_WORKERS / 2,
+            num_workers=config.DATA.NUM_WORKERS // 2,
             pin_memory=config.DATA.PIN_MEMORY,
             persistent_workers=True,
             prefetch_factor=2,

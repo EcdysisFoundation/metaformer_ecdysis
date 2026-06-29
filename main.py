@@ -115,7 +115,7 @@ def main(config):
 
     model_without_ddp = model.module
 
-    model = torch.compile(model)
+    model = torch.compile(model, dynamic=False)
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -241,7 +241,7 @@ def train_one_epoch_local_data(
 
         if config.DATA.ADD_META:
             samples, targets, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             meta = torch.stack(meta, dim=0)
             meta = meta.cuda(non_blocking=True)
         else:
@@ -341,7 +341,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
     for idx, data in enumerate(data_loader):
         if config.DATA.ADD_META:
             images, target, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             torch.stack(meta, dim=0)
             if mask_meta:
                 meta = torch.zeros_like(meta)
@@ -392,7 +392,7 @@ def test(config, data_loader, model):
     for idx, data in enumerate(data_loader):
         if config.DATA.ADD_META:
             images, target, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             meta = torch.stack(meta, dim=0)
             meta = meta.cuda(non_blocking=True)
         else:
@@ -465,7 +465,7 @@ def setup_distributed(config):
 if __name__ == '__main__':
     args, config = parse_option()
     logging.basicConfig(level=logging.INFO)
-
+    torch._dynamo.config.cache_size_limit = 64
     setup_distributed(config)
 
     if dist.get_rank() == 0:
