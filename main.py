@@ -104,10 +104,9 @@ def main(config):
 
     logger.info(f"Creating model: {config.MODEL.TYPE}-{config.MODEL.NAME}/{config.TAG}/{config.VERSION}")
     model = build_model(config)
+    model = model.to(memory_format=torch.channels_last)
 
     model.cuda()
-
-    scaler = torch.amp.GradScaler('cuda', enabled=False)
 
     optimizer = build_optimizer(config, model)
 
@@ -115,6 +114,8 @@ def main(config):
         model, device_ids=[int(os.environ["LOCAL_RANK"])], broadcast_buffers=False)
 
     model_without_ddp = model.module
+
+    model = torch.compile(model, dynamic=False)
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -186,7 +187,7 @@ def main(config):
 
         # Train
         train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
-                                   lr_scheduler, scaler, writer)
+                                   lr_scheduler, writer)
 
         # Validate
         if config.DATA.ADD_META:
@@ -221,7 +222,7 @@ def main(config):
 
 def train_one_epoch_local_data(
         config, model, criterion, data_loader, optimizer,
-        epoch, mixup_fn, lr_scheduler, scaler, tb_logger=None, log_freq=500):
+        epoch, mixup_fn, lr_scheduler, tb_logger=None, log_freq=500):
     model.train()
     if hasattr(model.module, 'cur_epoch'):
         model.module.cur_epoch = epoch
@@ -240,7 +241,7 @@ def train_one_epoch_local_data(
 
         if config.DATA.ADD_META:
             samples, targets, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             meta = torch.stack(meta, dim=0)
             meta = meta.cuda(non_blocking=True)
         else:
@@ -248,12 +249,13 @@ def train_one_epoch_local_data(
             meta = None
 
         samples = samples.cuda(non_blocking=True)
+        samples = samples.to(memory_format=torch.channels_last)
         targets = targets.cuda(non_blocking=True)
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             if config.DATA.ADD_META:
                 outputs = model(samples, meta)
             else:
@@ -262,45 +264,39 @@ def train_one_epoch_local_data(
 
         if config.TRAIN.ACCUMULATION_STEPS > 1:
             loss = loss / config.TRAIN.ACCUMULATION_STEPS
-            scaler.scale(loss).backward()
+            loss.backward()
 
-            # Check if we hit the step milestone OR reached the absolute end of the epoch data
             is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
             is_final_batch = (idx + 1) == num_steps
 
             if is_accum_boundary or is_final_batch:
-                scaler.unscale_(optimizer)
-
                 if config.TRAIN.CLIP_GRAD:
                     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
                 else:
                     grad_norm = get_grad_norm(model.parameters())
 
-                scaler.step(optimizer)
-                scaler.update()
+                optimizer.step()
                 optimizer.zero_grad()
                 lr_scheduler.step_update(epoch * num_steps + idx)
+
                 if dist.get_rank() == 0 and tb_logger is not None:
                     global_step = epoch * num_steps + idx
                     tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
                 norm_meter.update(grad_norm)
             else:
-                # For intermediate steps, set to zero, dont use,
-                # and do NOT clip the parameters yet.
                 grad_norm = torch.tensor(0.0)
         else:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
+            loss.backward()
+
             if config.TRAIN.CLIP_GRAD:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.TRAIN.CLIP_GRAD)
             else:
                 grad_norm = get_grad_norm(model.parameters())
 
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
             optimizer.zero_grad()
             lr_scheduler.step_update(epoch * num_steps + idx)
-            # --- LOG STANDARD GRAD NORM TO TENSORBOARD ---
+
             if dist.get_rank() == 0 and tb_logger is not None:
                 global_step = epoch * num_steps + idx
                 tb_logger.add_scalar('train/batch_grad_norm', grad_norm, global_step)
@@ -308,11 +304,9 @@ def train_one_epoch_local_data(
 
         torch.cuda.synchronize()
 
-        # Scale back the loss value for metrics accumulation if using gradient accumulation
         loss_val = loss.item() * config.TRAIN.ACCUMULATION_STEPS if config.TRAIN.ACCUMULATION_STEPS > 1 else loss.item()
         loss_meter.update(loss_val, targets.size(0))
 
-        # Periodic Batch-level Feedback (Console & TensorBoard)
         if idx % log_freq == 0 and dist.get_rank() == 0:
             lr = optimizer.param_groups[0]['lr']
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
@@ -327,7 +321,6 @@ def train_one_epoch_local_data(
             if tb_logger is not None:
                 global_step = epoch * num_steps + idx
                 tb_logger.add_scalar('train/batch_loss', loss_val, global_step)
-                # Note: batch_grad_norm is omitted here because it's recorded above at step-time
 
     # Epoch-level Summary for TensorBoard
     if dist.get_rank() == 0 and tb_logger is not None:
@@ -348,7 +341,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
     for idx, data in enumerate(data_loader):
         if config.DATA.ADD_META:
             images, target, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             torch.stack(meta, dim=0)
             if mask_meta:
                 meta = torch.zeros_like(meta)
@@ -360,7 +353,7 @@ def validate(config, data_loader, model, epoch, mask_meta=False, tb_logger=None)
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
@@ -399,7 +392,7 @@ def test(config, data_loader, model):
     for idx, data in enumerate(data_loader):
         if config.DATA.ADD_META:
             images, target, meta = data
-            meta = [m.float() for m in meta]
+            meta = [m.to(dtype=torch.bfloat16) for m in meta]
             meta = torch.stack(meta, dim=0)
             meta = meta.cuda(non_blocking=True)
         else:
@@ -409,7 +402,7 @@ def test(config, data_loader, model):
         images = images.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             if config.DATA.ADD_META:
                 output = model(images, meta)
             else:
@@ -472,7 +465,7 @@ def setup_distributed(config):
 if __name__ == '__main__':
     args, config = parse_option()
     logging.basicConfig(level=logging.INFO)
-
+    torch._dynamo.config.cache_size_limit = 64
     setup_distributed(config)
 
     if dist.get_rank() == 0:

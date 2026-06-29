@@ -5,8 +5,8 @@ DATA:
   DATASET: 'bugbox'
   IMG_SIZE: 384
   BATCH_SIZE: 4  # Has to have checkpoint activated
-  NUM_WORKERS: 8
-  NUM_READERS: 8
+  NUM_WORKERS: 4
+  NUM_READERS: 4
 MODEL:
   TYPE: MetaFG
   NAME: ecdysis
@@ -19,4 +19,3 @@ TRAIN:
   MIN_LR: 16e-6
   WARMUP_EPOCHS: 1
   SAMPLER: 'weighted'
-  ACCUMULATION_STEPS: 16
