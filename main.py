@@ -39,12 +39,6 @@ def parse_option():
 
     # easy config modification
     parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
-    parser.add_argument('--data-path',default='./imagenet', type=str, help='path to dataset')
-    parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
-    parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
-                        help='no: no cache, '
-                             'full: cache all data, '
-                             'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
     parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save_csv memory")
@@ -77,13 +71,11 @@ def parse_option():
                         help='dataset', default='bugbox')
     parser.add_argument('--lr-scheduler-name', type=str,
                         help='lr scheduler name,cosin linear,step')
-
     parser.add_argument('--pretrain', type=str,
                         help='pretrain')
-
     parser.add_argument('--version', type=str, help='Version to tag trained model')
 
-    args, unparsed = parser.parse_known_args()
+    args = parser.parse_args()
 
     config = get_config(args)
 
@@ -413,7 +405,13 @@ def test(config, data_loader, model):
 
     display = 3
     logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-    stats = get_stats(metrics, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
+    stats = get_stats(
+        metrics,
+        list(config.DATA.CLASS_NAMES),
+        Path(config.OUTPUT),
+        config.VERSION,
+        args.dataset,
+        save_csv=True)
     print('stats' + str(len(stats)))
     log_metrics(logger, epoch_metric, 'test')
     logger.info(f"Statistics per class:\n{stats}")

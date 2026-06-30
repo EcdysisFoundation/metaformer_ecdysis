@@ -16,7 +16,9 @@ from yacs.config import CfgNode
 
 from datetime import datetime
 
-from dataset_generation.data import ImageData, MORPHOS_ID
+from dataset_generation.data import (
+    set_morphospecies_map_index, DATASET_DIR, MORPHOSPECIES_MAP, MORPHOS_ID
+)
 
 
 def get_model_metrics(config: CfgNode):
@@ -77,7 +79,13 @@ def _get_stats_from_metrics(metrics: MetricCollection, total_column_name: str) -
         }
 
 
-def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, version: str, save_csv: bool = True):
+def get_stats(
+        metrics: MetricCollection,
+        class_names: List[str],
+        output: Path,
+        version: str,
+        dataset: str,
+        save_csv: bool = True):
     """
     Get and save per class statistics
     Args:
@@ -92,16 +100,16 @@ def get_stats(metrics: MetricCollection, class_names: List[str], output: Path, v
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
-        db = ImageData()
-        morphospecies_df = db.get_morphospecies_df()
+        morphospecies_map = pd.read_csv(f"{DATASET_DIR}/{dataset}/{MORPHOSPECIES_MAP}")
+        morphospecies_map = set_morphospecies_map_index(morphospecies_map)
         stats['model_name'] = version
-        stats = stats.merge(morphospecies_df, how='left', left_index=True, right_index=True)
+        stats = stats.merge(morphospecies_map, how='left', left_index=True, right_index=True)
         stats_csv = 'stats.csv'
         stats.to_csv(output / stats_csv)
         dataset_report_ = 'dataset_report_'
-        dataset_report_path = output/f'dataset_report.csv'
+        dataset_report_path = output/'dataset_report.csv'
         dataset_report_df = pd.read_csv(dataset_report_path) if dataset_report_path.exists() else None
-        dataset_report_df.morphos_id = dataset_report_df.morphos_id.astype('str')
+        dataset_report_df[MORPHOS_ID] = dataset_report_df[MORPHOS_ID].astype('str')
         print('dataset_report_df: ' + str(len(dataset_report_df)))
         logging.info(f"Length of dataset_report: {len(dataset_report_df)}, stats: {len(stats)}")
         dataset_report_df = dataset_report_df.add_prefix(dataset_report_)
