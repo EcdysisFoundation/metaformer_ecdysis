@@ -162,7 +162,7 @@ def timm_creat_transform(is_train, config):
         re_mode=config.AUG.REMODE,
         re_count=config.AUG.RECOUNT,
         interpolation='bilinear',
-        train_crop_mode='rkrc',
+        train_crop_mode='rkrc',  # Random Krazy Ratio Crop
         crop_mode='border'
     )
     return transform
