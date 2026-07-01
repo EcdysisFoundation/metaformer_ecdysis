@@ -84,7 +84,7 @@ def get_stats(
         class_names: List[str],
         output: Path,
         version: str,
-        dataset: str,
+        data_path: str,
         save_csv: bool = True):
     """
     Get and save per class statistics
@@ -100,7 +100,7 @@ def get_stats(
     stats = pd.DataFrame(data=stats_data, index=class_names).fillna(0)  # fill NaNs with 0 in case tp + fp = 0
 
     if save_csv:
-        morphospecies_map = pd.read_csv(f"{DATASET_DIR}/{dataset}/{MORPHOSPECIES_MAP}")
+        morphospecies_map = pd.read_csv(f"{data_path}/{MORPHOSPECIES_MAP}")
         morphospecies_map = set_morphospecies_map_index(morphospecies_map)
         stats['model_name'] = version
         stats = stats.merge(morphospecies_map, how='left', left_index=True, right_index=True)
