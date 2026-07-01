@@ -142,7 +142,7 @@ def load_insect_data(config, is_train, transform, logger) -> (datasets.ImageFold
     classes, class_to_index = dataset.find_classes(dataset.root)
     nb_classes = len(classes)
 
-    logger.info(f'Found {len(dataset)} images and {nb_classes} classes in {prefix} split of {config.DATA.DATASET}')
+    logger.info(f'Found {len(dataset)} images and {nb_classes} classes in {prefix}')
 
     return dataset, nb_classes
 
