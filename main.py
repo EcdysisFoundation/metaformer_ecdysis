@@ -73,7 +73,7 @@ def parse_option():
     parser.add_argument('--sampler', type=str, default=None, choices=('weighted',), help='Type of training sampler')
 
     parser.add_argument('--dataset', type=str,
-                        help='dataset', default='bugbox')
+                        help='dataset directory structure format', default='IMAGENET')
     parser.add_argument('--lr-scheduler-name', type=str,
                         help='lr scheduler name,cosin linear,step')
     parser.add_argument('--pretrain', type=str,
