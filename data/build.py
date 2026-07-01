@@ -15,7 +15,6 @@ import torch.distributed as dist
 from torchvision import datasets, transforms
 
 from timm.data import create_transform
-from timm.data.random_erasing import RandomErasing
 from timm.data.mixup import Mixup
 
 from logger import create_logger
@@ -194,12 +193,13 @@ def build_transform(is_train, config):
                 saturation=config.AUG.COLOR_JITTER
             ) if config.AUG.COLOR_JITTER > 0 else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
-            RandomErasing(
-                probability=config.AUG.REPROB,
-                mode=config.AUG.REMODE,
-                max_count=config.AUG.RECOUNT
+            transforms.RandomErasing(
+                p=config.AUG.REPROB,
+                value=config.AUG.REMODE,
+                scale=config.AUG.SCALE,  # Controls the min/max size of the erased box
+                ratio=config.AUG.RATIO,  # Controls the aspect ratio range of the box
             ) if config.AUG.REPROB > 0 else transforms.Lambda(lambda x: x),
-        ])
+                ])
     else:
         # Evaluation Pipeline
         transform = transforms.Compose([

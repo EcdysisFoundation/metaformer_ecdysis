@@ -160,6 +160,8 @@ _C.AUG.MIXUP_PROB = 1.0
 _C.AUG.MIXUP_SWITCH_PROB = 0.5
 # How to apply mixup/cutmix params. Per "batch", "pair", or "elem"
 _C.AUG.MIXUP_MODE = 'batch'
+_C.AUG.SCALE = (0.02, 0.10)
+_C.AUG.RATIO = (0.3, 3.3)
 
 # -----------------------------------------------------------------------------
 # Testing settings
