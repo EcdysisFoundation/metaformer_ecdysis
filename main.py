@@ -234,9 +234,11 @@ def train_one_epoch_local_data(
     start_time = time.time()
 
     # Calculate the base step for the LR scheduler
-    steps_per_epoch = num_steps // config.TRAIN.ACCUMULATION_STEPS
-    if num_steps % config.TRAIN.ACCUMULATION_STEPS != 0:
+    if num_steps % config.TRAIN.ACCUMULATION_STEPS:
+        steps_per_epoch = num_steps // config.TRAIN.ACCUMULATION_STEPS
         steps_per_epoch += 1
+    else:
+        steps_per_epoch = num_steps
     optimizer_step = epoch * steps_per_epoch
 
     for idx, data in enumerate(data_loader):
