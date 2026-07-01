@@ -424,7 +424,7 @@ def test(config, data_loader, model):
         list(config.DATA.CLASS_NAMES),
         Path(config.OUTPUT),
         config.VERSION,
-        args.dataset,
+        args.data_path,
         save_csv=True)
     print('stats' + str(len(stats)))
     log_metrics(logger, epoch_metric, 'test')
