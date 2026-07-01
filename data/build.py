@@ -12,7 +12,9 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torchvision import datasets
+from torchvision import datasets, transforms
+
+from timm.data.transforms import RandomErasing
 
 from timm.data import create_transform
 from timm.data.mixup import Mixup
@@ -147,7 +149,10 @@ def load_insect_data(config, is_train, transform, logger) -> (datasets.ImageFold
     return dataset, nb_classes
 
 
-def build_transform(is_train, config):
+def timm_creat_transform(is_train, config):
+    """
+    Optionally use timm lirbrary transforms instead of build_transform.
+    """
     transform = create_transform(
         input_size=config.DATA.IMG_SIZE,
         is_training=is_train,
@@ -160,4 +165,48 @@ def build_transform(is_train, config):
         train_crop_mode='rkrc',
         crop_mode='border'
     )
+    return transform
+
+
+class SquarePad(object):
+    """Pads an image to a square shape, preserving original aspect ratio."""
+    def __call__(self, image):
+        w, h = image.size
+        max_wh = max(w, h)
+        hp = (max_wh - w) // 2
+        vp = (max_wh - h) // 2
+        padding = (hp, vp, max_wh - w - hp, max_wh - h - vp)
+        # Pads with a 0 fill (black)
+        return transforms.functional.pad(image, padding, fill=0, padding_mode='constant')
+
+
+def build_transform(is_train, config):
+    img_size = config.DATA.IMG_SIZE
+
+    if is_train:
+        transform = transforms.Compose([
+            SquarePad(),
+            transforms.Resize((img_size, img_size), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),  # In lab dishes, orientation is completely arbitrary
+            transforms.ColorJitter(
+                brightness=config.AUG.COLOR_JITTER,
+                contrast=config.AUG.COLOR_JITTER,
+                saturation=config.AUG.COLOR_JITTER
+            ) if config.AUG.COLOR_JITTER > 0 else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            RandomErasing(
+                probability=config.AUG.REPROB,
+                mode=config.AUG.REMODE,
+                max_count=config.AUG.RECOUNT
+            ) if config.AUG.REPROB > 0 else transforms.Lambda(lambda x: x),
+        ])
+    else:
+        # Evaluation Pipeline
+        transform = transforms.Compose([
+            SquarePad(),
+            transforms.Resize((img_size, img_size), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.ToTensor(),
+        ])
+
     return transform
