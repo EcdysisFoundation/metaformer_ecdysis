@@ -14,9 +14,7 @@ import torch
 import torch.distributed as dist
 from torchvision import datasets, transforms
 
-from timm.data.transforms import RandomErasing
-
-from timm.data import create_transform
+from timm.data import create_transform, RandomErasing
 from timm.data.mixup import Mixup
 
 from logger import create_logger
