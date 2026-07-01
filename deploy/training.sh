@@ -12,6 +12,8 @@ set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_script
 # view training log for status updates
 # tail -f training_run.log
 
+# bash deploy/training.sh 7max200 6/6 7testing > training_run.log 2>&1 &
+
 cd /home/ecdysis/MetaFormer/
 
 OUTPUT_DIR="output/ecdysis"
@@ -34,5 +36,5 @@ echo "Found ${GPU_COUNT} GPU(s)"
 wait
 # Evaluate trained model
 /home/ecdysis/miniconda3/envs/pytorch/bin/torchrun --nproc_per_node ${GPU_COUNT} main.py \
-  --cfg "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/config.yaml" --dataset bugbox --data-path "datasets/${DATASET_NAME}" --eval  --pretrain "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION"
+  --cfg "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/config.yaml" --data-path "datasets/${DATASET_NAME}" --eval  --pretrain "${OUTPUT_DIR}/${DATASET_NAME}/${THIS_VERSION}/best.pth" --version "$THIS_VERSION"
 wait

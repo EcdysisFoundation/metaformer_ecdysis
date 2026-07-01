@@ -38,6 +38,11 @@ def parse_option():
     )
 
     parser.add_argument('--data-path', type=str, help='path to dataset')
+    parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
+    parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
+                        help='no: no cache, '
+                             'full: cache all data, '
+                             'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
     parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
