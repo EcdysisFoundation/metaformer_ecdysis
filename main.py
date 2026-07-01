@@ -233,12 +233,17 @@ def train_one_epoch_local_data(
 
     start_time = time.time()
 
+    # Local variable for cleaner and safer access
+    acc_steps = config.TRAIN.ACCUMULATION_STEPS
+
     # Calculate the base step for the LR scheduler
-    if num_steps % config.TRAIN.ACCUMULATION_STEPS:
-        steps_per_epoch = num_steps // config.TRAIN.ACCUMULATION_STEPS
-        steps_per_epoch += 1
-    else:
+    if acc_steps <= 1:
+        # 0 or 1 means no accumulation; optimizer steps match total steps
         steps_per_epoch = num_steps
+    else:
+        # Standard ceiling division: handles remainders cleanly
+        steps_per_epoch = (num_steps + acc_steps - 1) // acc_steps
+
     optimizer_step = epoch * steps_per_epoch
 
     for idx, data in enumerate(data_loader):
@@ -261,7 +266,8 @@ def train_one_epoch_local_data(
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
+        # SAFE BOUNDARY CHECK: If acc_steps is 0 or 1, every step is a boundary
+        is_accum_boundary = True if acc_steps <= 1 else ((idx + 1) % acc_steps == 0)
         is_final_batch = (idx + 1) == num_steps
         should_step = is_accum_boundary or is_final_batch
 
@@ -277,8 +283,9 @@ def train_one_epoch_local_data(
                     outputs = model(samples)
                 loss = criterion(outputs, targets)
 
-            if config.TRAIN.ACCUMULATION_STEPS > 1:
-                loss = loss / config.TRAIN.ACCUMULATION_STEPS
+            # Safe Scaling: Only divide if we are actually accumulating gradients
+            if acc_steps > 1:
+                loss = loss / acc_steps
 
             loss.backward()
 
@@ -302,7 +309,8 @@ def train_one_epoch_local_data(
 
         torch.cuda.synchronize()
 
-        loss_val = loss.item() * config.TRAIN.ACCUMULATION_STEPS if config.TRAIN.ACCUMULATION_STEPS > 1 else loss.item()
+        # Safe Logging: Only scale back up if it was originally scaled down
+        loss_val = loss.item() * acc_steps if acc_steps > 1 else loss.item()
         loss_meter.update(loss_val, targets.size(0))
 
         if idx % log_freq == 0 and dist.get_rank() == 0:
@@ -317,7 +325,6 @@ def train_one_epoch_local_data(
             )
 
             if tb_logger is not None:
-                # Use the actual optimizer step for Tensorboard logging for consistency
                 tb_logger.add_scalar('train/batch_loss', loss_val, optimizer_step)
 
     # Epoch-level Summary for TensorBoard
