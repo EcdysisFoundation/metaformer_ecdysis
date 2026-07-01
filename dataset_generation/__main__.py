@@ -3,7 +3,11 @@ import logging
 import os
 from pathlib import Path
 
-from .data import ImageData
+from .data import (
+    get_dataset, get_morphospecies_map,
+    DATASET_DIR, MORPHOS_NAME,
+    MORPHOSPECIES_MAP
+)
 from .split import split_from_df, generate_split_class_report
 from .utils import drop_identical_images, is_image_corrupted
 
@@ -19,8 +23,9 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Data generation pipeline')
     parser.add_argument('dataset', type=str, help='Name of the generated dataset')
     parser.add_argument('--img-mnt', type=str,
+                        default='/pool1/srv/bugbox3/bugbox3/media/',
                         help='Path to images directory')
-    parser.add_argument('--train-size', type=float, default=0.6, help='Relative size of the train split')
+    parser.add_argument('--train-size', type=float, default=0.8, help='Relative size of the train split')
     parser.add_argument('--check-corrupted', action='store_true', help='Check for corrupted images')
     parser.add_argument('--hard-copy', action='store_true', help='Copy images instead of symlinking them')
     parser.add_argument('--minimum-images', type=int, default=20, help='Do not create a class unless it has at least '
@@ -36,11 +41,11 @@ def main():
     assert 0 < args.train_size <= 1, 'Train size must be between 0 and 1'
 
     img_mnt = Path(args.img_mnt)
-    dataset_dir = Path(f'datasets/{args.dataset}')
+    dataset_dir = Path(f'{DATASET_DIR}/{args.dataset}')
     dataset_dir.mkdir(exist_ok=True, parents=True)
 
-    db = ImageData()
-    images = db.get_reviewed_images_df()
+    images = get_dataset(args.minimum_images)
+
     images['image'] = images['image'].apply(lambda x: str(img_mnt / x))
 
     # check if files exist
@@ -70,15 +75,20 @@ def main():
 
     images = drop_identical_images(images)
 
+    # re-check minimum images
+    image_counts = images[MORPHOS_NAME].value_counts()
+    valid_categories = image_counts[image_counts >= args.minimum_images].index
+    images = images[images[MORPHOS_NAME].isin(valid_categories)]
+    classes_removed = len(image_counts) - len(valid_categories)
+    print(f"Removed {classes_removed} classes with fewer than {args.minimum_images} images.")
     splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy,
                            seed=SEED, min_images=args.minimum_images)
 
     meta_file = dataset_dir/'metadata.csv'
     images.to_csv(meta_file, index=False)
 
-    morphospecies_map = db.get_morphospecies_df()
-    morphospecies_map.to_csv(dataset_dir / 'morphospecies_map.csv')
-    morphospecies_map.to_csv('deploy/morphospecies_map.csv')
+    morphospecies_map = get_morphospecies_map(images)
+    morphospecies_map.to_csv(dataset_dir / MORPHOSPECIES_MAP)
 
     report_count_df = generate_split_class_report(splits, morphospecies_map)
     report_count_df.to_csv(dataset_dir / 'dataset_report.csv', index=False)

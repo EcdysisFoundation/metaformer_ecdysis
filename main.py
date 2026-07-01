@@ -37,14 +37,13 @@ def parse_option():
         nargs='+',
     )
 
-    # easy config modification
-    parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
-    parser.add_argument('--data-path',default='./imagenet', type=str, help='path to dataset')
+    parser.add_argument('--data-path', type=str, help='path to dataset')
     parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
     parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
                         help='no: no cache, '
                              'full: cache all data, '
                              'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
+    parser.add_argument('--batch-size', type=int, help="batch size for single GPU")
     parser.add_argument('--resume', help='resume from checkpoint')
     parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
     parser.add_argument('--use-checkpoint', action='store_true', help="whether to use gradient checkpointing to save_csv memory")
@@ -74,16 +73,14 @@ def parse_option():
     parser.add_argument('--sampler', type=str, default=None, choices=('weighted',), help='Type of training sampler')
 
     parser.add_argument('--dataset', type=str,
-                        help='dataset', default='bugbox')
+                        help='dataset directory structure format', default='IMAGENET')
     parser.add_argument('--lr-scheduler-name', type=str,
                         help='lr scheduler name,cosin linear,step')
-
     parser.add_argument('--pretrain', type=str,
                         help='pretrain')
-
     parser.add_argument('--version', type=str, help='Version to tag trained model')
 
-    args, unparsed = parser.parse_known_args()
+    args = parser.parse_args()
 
     config = get_config(args)
 
@@ -236,10 +233,17 @@ def train_one_epoch_local_data(
 
     start_time = time.time()
 
+    # Local variable for cleaner and safer access
+    acc_steps = config.TRAIN.ACCUMULATION_STEPS
+
     # Calculate the base step for the LR scheduler
-    steps_per_epoch = num_steps // config.TRAIN.ACCUMULATION_STEPS
-    if num_steps % config.TRAIN.ACCUMULATION_STEPS != 0:
-        steps_per_epoch += 1
+    if acc_steps <= 1:
+        # 0 or 1 means no accumulation; optimizer steps match total steps
+        steps_per_epoch = num_steps
+    else:
+        # Standard ceiling division: handles remainders cleanly
+        steps_per_epoch = (num_steps + acc_steps - 1) // acc_steps
+
     optimizer_step = epoch * steps_per_epoch
 
     for idx, data in enumerate(data_loader):
@@ -262,7 +266,8 @@ def train_one_epoch_local_data(
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        is_accum_boundary = (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0
+        # SAFE BOUNDARY CHECK: If acc_steps is 0 or 1, every step is a boundary
+        is_accum_boundary = True if acc_steps <= 1 else ((idx + 1) % acc_steps == 0)
         is_final_batch = (idx + 1) == num_steps
         should_step = is_accum_boundary or is_final_batch
 
@@ -278,8 +283,9 @@ def train_one_epoch_local_data(
                     outputs = model(samples)
                 loss = criterion(outputs, targets)
 
-            if config.TRAIN.ACCUMULATION_STEPS > 1:
-                loss = loss / config.TRAIN.ACCUMULATION_STEPS
+            # Safe Scaling: Only divide if we are actually accumulating gradients
+            if acc_steps > 1:
+                loss = loss / acc_steps
 
             loss.backward()
 
@@ -303,7 +309,8 @@ def train_one_epoch_local_data(
 
         torch.cuda.synchronize()
 
-        loss_val = loss.item() * config.TRAIN.ACCUMULATION_STEPS if config.TRAIN.ACCUMULATION_STEPS > 1 else loss.item()
+        # Safe Logging: Only scale back up if it was originally scaled down
+        loss_val = loss.item() * acc_steps if acc_steps > 1 else loss.item()
         loss_meter.update(loss_val, targets.size(0))
 
         if idx % log_freq == 0 and dist.get_rank() == 0:
@@ -318,7 +325,6 @@ def train_one_epoch_local_data(
             )
 
             if tb_logger is not None:
-                # Use the actual optimizer step for Tensorboard logging for consistency
                 tb_logger.add_scalar('train/batch_loss', loss_val, optimizer_step)
 
     # Epoch-level Summary for TensorBoard
@@ -413,7 +419,13 @@ def test(config, data_loader, model):
 
     display = 3
     logger.info(f"First class entries are:\n{list(config.DATA.CLASS_NAMES)[:display]}")
-    stats = get_stats(metrics, list(config.DATA.CLASS_NAMES), Path(config.OUTPUT), config.VERSION, save_csv=True)
+    stats = get_stats(
+        metrics,
+        list(config.DATA.CLASS_NAMES),
+        Path(config.OUTPUT),
+        config.VERSION,
+        args.data_path,
+        save_csv=True)
     print('stats' + str(len(stats)))
     log_metrics(logger, epoch_metric, 'test')
     logger.info(f"Statistics per class:\n{stats}")

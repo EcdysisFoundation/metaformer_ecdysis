@@ -99,7 +99,7 @@ def build_loader(config):
 
 def build_dataset(is_train, config, logger):
     transform = build_transform(is_train, config)
-    if config.DATA.DATASET.startswith('bugbox'):
+    if config.DATA.DATASET.startswith('IMAGENET'):
         dataset, nb_classes = load_insect_data(config, is_train, transform, logger)
         if is_train:
             config.DATA.CLASS_NAMES = dataset.classes
