@@ -219,20 +219,13 @@ def update_config(config, args):
         config.merge_from_list(args.opts)
 
     # merge from specific arguments
-    if args.batch_size:
-        config.DATA.BATCH_SIZE = args.batch_size
+
     if args.data_path:
         config.DATA.DATA_PATH = args.data_path
-    if args.zip:
-        config.DATA.ZIP_MODE = True
     if args.cache_mode:
         config.DATA.CACHE_MODE = args.cache_mode
     if args.resume:
         config.MODEL.RESUME = args.resume
-    if args.accumulation_steps:
-        config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
-    if args.use_checkpoint:
-        config.TRAIN.USE_CHECKPOINT = True
     if args.output:
         config.OUTPUT = args.output
     if args.tag:
@@ -243,31 +236,8 @@ def update_config(config, args):
         config.EVAL_MODE = True
     if args.throughput:
         config.THROUGHPUT_MODE = True
-    if args.sampler:
-        config.TRAIN.SAMPLER = args.sampler
-
-
-    if args.num_workers is not None:
-        config.DATA.NUM_WORKERS = args.num_workers
-
-    #set lr and weight decay
-    if args.lr is not None:
-        config.TRAIN.BASE_LR = args.lr
-    if args.min_lr is not None:
-        config.TRAIN.MIN_LR = args.min_lr
-    if args.warmup_lr is not None:
-        config.TRAIN.WARMUP_LR = args.warmup_lr
-    if args.warmup_epochs is not None:
-        config.TRAIN.WARMUP_EPOCHS = args.warmup_epochs
-    if args.weight_decay is not None:
-        config.TRAIN.WEIGHT_DECAY = args.weight_decay
-
-    if args.epochs is not None:
-        config.TRAIN.EPOCHS = args.epochs
     if args.dataset is not None:
         config.DATA.DATASET = args.dataset
-    if args.lr_scheduler_name is not None:
-        config.TRAIN.LR_SCHEDULER.NAME = args.lr_scheduler_name
     if args.pretrain is not None:
         config.MODEL.PRETRAINED = args.pretrain
 

@@ -19,3 +19,5 @@ TRAIN:
   MIN_LR: 16e-6
   WARMUP_EPOCHS: 1
   SAMPLER: 'weighted'
+AUG:
+  REMODE: 'random'
