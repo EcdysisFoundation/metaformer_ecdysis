@@ -6,7 +6,6 @@ DATA:
   IMG_SIZE: 384
   BATCH_SIZE: 4
   NUM_WORKERS: 4
-  NUM_READERS: 4
 MODEL:
   TYPE: MetaFG
   NAME: ecdysis
