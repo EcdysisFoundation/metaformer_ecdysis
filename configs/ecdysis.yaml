@@ -4,7 +4,7 @@
 DATA:
   DATASET: 'bugbox'
   IMG_SIZE: 384
-  BATCH_SIZE: 4
+  BATCH_SIZE: 8
   NUM_WORKERS: 4
 MODEL:
   TYPE: MetaFG
@@ -20,3 +20,5 @@ TRAIN:
   EARLY_STOP:
     MIN_EPOCHS: 100
     PATIENCE: 30
+AUG:
+  REMODE: 'random'
