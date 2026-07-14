@@ -12,8 +12,6 @@ set -eE  # Exit if any command fails https://vaneyckt.io/posts/safer_bash_script
 # view training log for status updates
 # tail -f training_run.log
 
-# bash deploy/training.sh 7max200 6/6 7testing > training_run.log 2>&1 &
-
 cd /home/ecdysis/MetaFormer/
 
 OUTPUT_DIR="output/ecdysis"
