@@ -4,13 +4,17 @@ This repo uses a MetaFormer modeling approach to serve as an AI classification m
 
 Welch, K. D., Wilson, M. E., & Lundgren, J. G. (2026). Evaluation of BugBox, a software platform for AI-assisted bioinventories of arthropods. Journal of Animal Ecology, 95, 192–203. https://doi.org/10.1111/1365-2656.70178
 
+## Open weights
+
+We open source release the trained model weights, and training data, at https://bugbox.ecdysis.bio/samples/collection-download/1
+
 ## Origination
 
 This repo was originally forked from https://github.com/dqshuai/MetaFormer . A part of this code was borrowed from https://github.com/microsoft/Swin-Transformer
 
 The MetaFormer model is described in the original README here https://github.com/EcdysisFoundation/metaformer_ecdysis/blob/main/metaformer.md
 
-Updates to these include compatibility to torch==2.6.0.
+Ecdysis Foundation updates to these include compatibility to torch>=2.6.0 among other performance improvments and modifications for our use case.
 
 ## Environment
 
@@ -43,7 +47,10 @@ We version each training with a name (THIS_VERSION). This can be the same as the
     - STARTING_CHECKPOINT  The directory name of the starting best.pth checkpoint
     - THIS_VERSION      Names a new directory inside OUTPUT_DIR and is used as the model version in the inference response
 
- Training can be run with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background and write output to a file, append the following to the command above ` > file.log 2>&1 &`.
+
+ Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background (required for long trainings through a terminal session) and write output to a file, append nohup and a logging output statement to the command above, for example `nohup bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > file.log 2>&1 &`.
+
+
 
 ## Deployment
 
