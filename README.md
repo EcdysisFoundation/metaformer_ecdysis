@@ -1,9 +1,8 @@
 # metaformer_ecdysis
 
-This repo uses a MetaFormer modeling approach to serve as an AI classification model for the Ecdsysis Foundation's ( https://www.ecdysis.bio/ ) BugBox applcation, see https://bugbox.ecdysis.bio/ . As part of our work, we generate biological inventories of farm sites in various stages of regenerative adoption. One aspect of this is collecting and identifying many hundreds of thousands of insects. We use artificial intelligence to give preliminary identifications to each insect we collect, then review a proportion of identifications and retrain our model to improve it over time. This activity is described in the following peer review publication.
+This repo uses a MetaFormer modeling approach to serve as an AI classification model for Ecdsysis Foundation's ( https://www.ecdysis.bio/ ) BugBox application, see https://bugbox.ecdysis.bio/ . As part of our work, we generate biological inventories of farm sites in various stages of regenerative adoption. One aspect of this is collecting and identifying many hundreds of thousands of insects. We use artificial intelligence to give preliminary identifications to each insect we collect, then review a proportion of identifications and retrain our model to improve it over time. This activity is described in the following peer reviewed publication.
 
-Welch, K. Wilson, M. Lundgren, J (2025). Evaluation of BugBox, a software platform for AI-assisted bioinventories of
-arthropods. Journal of Animal Ecology. https://doi.org/10.1111/1365-2656.70178
+Welch, K. D., Wilson, M. E., & Lundgren, J. G. (2026). Evaluation of BugBox, a software platform for AI-assisted bioinventories of arthropods. Journal of Animal Ecology, 95, 192–203. https://doi.org/10.1111/1365-2656.70178
 
 ## Open weights
 
@@ -48,7 +47,10 @@ We version each training with a name (THIS_VERSION). This can be the same as the
     - STARTING_CHECKPOINT  The directory name of the starting best.pth checkpoint
     - THIS_VERSION      Names a new directory inside OUTPUT_DIR and is used as the model version in the inference response
 
- Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background (required for long trainings through a terminal session) and write output to a file, append nohup, &, and a logging output statement to the command above `nohup bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > file.log 2>&1 &`.
+
+ Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background (required for long trainings through a terminal session) and write output to a file, append nohup and a logging output statement to the command above, for example `nohup bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > file.log 2>&1 &`.
+
+
 
 ## Deployment
 
