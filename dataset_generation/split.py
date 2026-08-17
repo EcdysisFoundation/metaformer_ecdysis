@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from .utils import save_yaml_file
-from .data import MORPHOS_ID, MORPHOS_NAME
+from .data import MORPHOS_ID, MORPHOS_NAME, IMAGE_FIELD
 from . import LOGGING_LEVEL, SEED
 
 from tqdm import tqdm
@@ -269,7 +269,7 @@ def split_from_df(df: pd.DataFrame, train_size: float, output: Path, use_symlink
     df['class_name'] = df[MORPHOS_ID]
 
     # When using morphospecies class name here is actually the id of the class, converted to str, not the name
-    images = dict(df.groupby('class_name')['image'].apply(list))  # Convert to dict to use filter_underrepresented
+    images = dict(df.groupby('class_name')[IMAGE_FIELD].apply(list))
 
     splits = {}
     for class_name, image_list in images.items():

@@ -6,7 +6,8 @@ from pathlib import Path
 from .data import (
     get_dataset, get_morphospecies_map,
     DATASET_DIR, MORPHOS_NAME,
-    MORPHOSPECIES_MAP
+    MORPHOSPECIES_MAP,
+    IMAGE_FIELD
 )
 from .split import split_from_df, generate_split_class_report
 from .utils import drop_identical_images, is_image_corrupted
@@ -46,11 +47,11 @@ def main():
 
     images = get_dataset(args.minimum_images)
 
-    images['image'] = images['image'].apply(lambda x: str(img_mnt / x))
+    images[IMAGE_FIELD] = images[IMAGE_FIELD].apply(lambda x: str(img_mnt / x))
 
     # check if files exist
     print('Checking for missing images ...')
-    images['exists'] = images['image'].astype(str).map(os.path.exists)
+    images['exists'] = images[IMAGE_FIELD].astype(str).map(os.path.exists)
     missing_images = images[images['exists'] == False]
     if len(missing_images):
         v = len(missing_images)
@@ -66,7 +67,7 @@ def main():
     if args.check_corrupted:
         # check for corrupted files
         print('checking for corrupted images ....')
-        images['corrupted'] = images['image'].astype(str).map(is_image_corrupted)
+        images['corrupted'] = images[IMAGE_FIELD].astype(str).map(is_image_corrupted)
         corrupted_images = images[images['corrupted']]
         if len(corrupted_images):
             corrupted_images.to_csv(dataset_dir / 'corrupted_images.csv')

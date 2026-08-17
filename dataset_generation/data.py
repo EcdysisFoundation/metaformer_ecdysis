@@ -1,10 +1,20 @@
 import pandas as pd
 
-MORPHOS_ID = 'morphos_id'
-MORPHOS_NAME = 'morphos_name'
+MORPHOS_ID = 'specimen__classification_id'
+MORPHOS_NAME = 'specimen__classification__name'
+IMAGE_FIELD = 'image'
+MD5_HASH = 'md5_hash'
 DATASET_DIR = 'datasets'
 MORPHOSPECIES_MAP = 'morphospecies_map.csv'
-DF_COLS = [MORPHOS_NAME, MORPHOS_ID, 'specimen_id', 'image', 'gbif_canonical_name']
+
+DF_COLS = [
+    MORPHOS_NAME,
+    MORPHOS_ID,
+    'specimen__classification__gbif_canonical_name',
+    'specimen_id',
+    IMAGE_FIELD,
+    MD5_HASH
+]
 
 
 def get_reviewed_images_df():
