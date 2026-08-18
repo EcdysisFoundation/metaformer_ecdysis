@@ -124,14 +124,10 @@ def main(config):
 
     max_accuracy = 0.0
     if config.MODEL.RESUME:
-        logger.info(f"**********normal test***********")
+        logger.info("**********normal test***********")
         max_accuracy = load_checkpoint(config, model_without_ddp, optimizer, lr_scheduler, logger)
-        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH)
+        acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=config.DATA.ADD_META)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} validation images: {acc1:.1f}%")
-        if config.DATA.ADD_META:
-            logger.info("**********mask meta test***********")
-            acc1, acc5, loss = validate(config, data_loader_val, model, config.TRAIN.START_EPOCH, mask_meta=True)
-            logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
 
     if config.THROUGHPUT_MODE:
         throughput(data_loader_val, model, logger)
@@ -159,12 +155,8 @@ def main(config):
         # Train
         train_one_epoch_local_data(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn,
                                    lr_scheduler, writer)
-
         # Validate
-        if config.DATA.ADD_META:
-            acc1, acc5, loss = validate(config, data_loader_val, model, epoch, mask_meta=True, tb_logger=writer)
-        else:
-            acc1, acc5, loss = validate(config, data_loader_val, model, epoch, tb_logger=writer)
+        acc1, acc5, loss = validate(config, data_loader_val, model, epoch, mask_meta=config.DATA.ADD_META, tb_logger=writer)
 
         if acc1 > max_accuracy:
             max_accuracy = acc1
