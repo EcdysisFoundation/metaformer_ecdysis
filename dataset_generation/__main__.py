@@ -31,6 +31,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--hard-copy', action='store_true', help='Copy images instead of symlinking them')
     parser.add_argument('--minimum-images', type=int, default=20, help='Do not create a class unless it has at least '
                                                                        'this number of images')
+    parser.add_argument('--max-images', type=int, default=200, help='Limit a class to this number of images')
 
     return parser.parse_args()
 
@@ -82,6 +83,18 @@ def main():
     images = images[images[MORPHOS_NAME].isin(valid_categories)]
     classes_removed = len(image_counts) - len(valid_categories)
     print(f"Removed {classes_removed} classes with fewer than {args.minimum_images} images.")
+    # Cap over-represented classes at args.max_images
+    records_before = len(images)
+    images = (
+        images.sample(frac=1, random_state=42)
+        .groupby(MORPHOS_NAME)
+        .head(args.max_images)
+    )
+    records_removed = records_before - len(images)
+    print(
+        f"Removed {records_removed} excess images from classes with more than"
+        f" {args.maximum_images} images."
+    )
     splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy,
                            seed=SEED, min_images=args.minimum_images)
 
