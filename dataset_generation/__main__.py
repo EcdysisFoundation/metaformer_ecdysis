@@ -93,7 +93,7 @@ def main():
     records_removed = records_before - len(images)
     print(
         f"Removed {records_removed} excess images from classes with more than"
-        f" {args.maximum_images} images."
+        f" {args.max_images} images."
     )
     splits = split_from_df(images, args.train_size, dataset_dir, not args.hard_copy,
                            seed=SEED, min_images=args.minimum_images)
