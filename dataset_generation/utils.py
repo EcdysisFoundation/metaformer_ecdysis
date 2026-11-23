@@ -14,9 +14,7 @@ logger.setLevel(LOGGING_LEVEL)
 
 
 def get_pixel_md5(image_field: str) -> str:
-    # Calling image_field.open('rb') guarantees Django fetches
-    # the file stream from local storage OR Amazon S3.
-    with image_field.open('rb') as f:
+    with open(image_field, 'rb') as f:
         with Image.open(f) as img:
             img_standardized = img.convert('RGB')
             pixel_bytes = img_standardized.tobytes()
