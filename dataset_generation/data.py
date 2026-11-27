@@ -18,7 +18,7 @@ DF_COLS = [
 
 
 def get_reviewed_images_df():
-    specimen_df = pd.read_csv('dataset_generation/training_selections_EYhOeqk_w_newclassname.csv')
+    specimen_df = pd.read_csv('dataset_generation/training_selections.csv')
     return pd.DataFrame(specimen_df)[DF_COLS]
 
 
