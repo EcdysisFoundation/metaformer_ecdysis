@@ -13,7 +13,7 @@ DF_COLS = [
     'specimen__classification__gbif_canonical_name',
     'specimen_id',
     IMAGE_FIELD,
-    MD5_HASH
+    MD5_HASH,
 ]
 
 
@@ -30,9 +30,8 @@ def get_supplemental_images_df():
     return pd.DataFrame(extra_df)[DF_COLS]
 
 
-def get_dataset(minimum_images):
+def get_dataset(minimum_images, use_supplemental=False):
     images_df = get_reviewed_images_df()
-    images_supplemental = get_supplemental_images_df()
 
     # determine the maximum images per class, and which get supplemental images to get closer to that maximum
     df_counts = images_df[MORPHOS_NAME].value_counts()
@@ -41,8 +40,11 @@ def get_dataset(minimum_images):
     if max_imgs_perclass < minimum_images:
         print(f"Exiting: The highest category count ({max_imgs_perclass}) is less than the required minimum of {minimum_images}.")
         return
-
-    all_categories = set(images_df[MORPHOS_NAME].unique()).union(set(images_supplemental[MORPHOS_NAME].unique()))
+    if use_supplemental:
+        images_supplemental = get_supplemental_images_df()
+        all_categories = set(images_df[MORPHOS_NAME].unique()).union(set(images_supplemental[MORPHOS_NAME].unique()))
+    else:
+        all_categories = set(images_df[MORPHOS_NAME].unique())
     final_chunks = []
 
     for category in all_categories:
@@ -51,7 +53,7 @@ def get_dataset(minimum_images):
 
         # Calculate how many more we need to reach our dynamic maximum
         needed = max_imgs_perclass - current_count
-        if needed > 0:
+        if needed > 0 and use_supplemental:
             # Filter images_supplemental for this specific category
             available_pool = images_supplemental[images_supplemental[MORPHOS_NAME] == category]
             # Take up to the 'needed' amount (handles cases where there aren't enough records)
