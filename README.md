@@ -39,16 +39,15 @@ We version each training with a name (THIS_VERSION). This can be the same as the
 ```commandline
     conda activate pytorch
 
-    bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION
+    bash deploy/training.sh DATASET_NAME THIS_VERSION
 ```
    *positional arguments*:
 
     - DATASET_NAME      Name of the dataset directory.
-    - STARTING_CHECKPOINT  The directory name of the starting best.pth checkpoint
     - THIS_VERSION      Names a new directory inside OUTPUT_DIR and is used as the model version in the inference response
 
 
- Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background (required for long trainings through a terminal session) and write output to a file, append nohup and a logging output statement to the command above, for example `nohup bash deploy/training.sh DATASET_NAME STARTING_CHECKPOINT THIS_VERSION > file.log 2>&1 &`.
+ Traing can be ran with one or two epochs for testing (for example using config `configs/ecdysis_test.yaml`). To run in background (required for long trainings through a terminal session) and write output to a file, append nohup and a logging output statement to the command above, for example `nohup bash deploy/training.sh DATASET_NAME THIS_VERSION > file.log 2>&1 &`.
 
 
 
