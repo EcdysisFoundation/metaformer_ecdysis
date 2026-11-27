@@ -1,21 +1,19 @@
 import pandas as pd
 
-MORPHOS_ID = 'new_classname'  # 'specimen__classification_id'
-MORPHOS_NAME = 'new_classname'  # 'specimen__classification__name'
+MORPHOS_ID = 'specimen__classification_id'
+MORPHOS_NAME = 'specimen__classification__name'
 IMAGE_FIELD = 'image'
 MD5_HASH = 'md5_hash'
 DATASET_DIR = 'datasets'
 MORPHOSPECIES_MAP = 'morphospecies_map.csv'
-NEW_CLASSNAME = 'new_classname'
 
 DF_COLS = [
-    # MORPHOS_NAME,
-    # MORPHOS_ID,
+    MORPHOS_NAME,
+    MORPHOS_ID,
     'specimen__classification__gbif_canonical_name',
     'specimen_id',
     IMAGE_FIELD,
     MD5_HASH,
-    NEW_CLASSNAME
 ]
 
 
